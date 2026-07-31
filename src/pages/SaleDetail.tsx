@@ -91,7 +91,6 @@ export function SaleDetail() {
   const invoiceTitle = settings?.store_name || 'Shoe Gallery';
   const receiptFooter = settings?.receipt_footer || 'Thank you for shopping with us.';
   const customerName = sale?.customer?.name || 'Walk-in Customer';
-  const cashierName = sale?.cashier?.full_name || sale?.cashier?.email || 'Cashier';
   const changeDue = Math.max(Number(sale?.paid_amount ?? 0) - Number(sale?.total_amount ?? 0), 0);
 
   if (loading) return <LoadingSpinner />;
