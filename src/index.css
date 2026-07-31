@@ -1,0 +1,602 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+@layer components {
+  /* ── Glass surface ── */
+  .glass-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-card::before {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: 1rem;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      transparent 45%,
+      transparent 100%
+    );
+  }
+
+  .glass-card-hover {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.03) 50%,
+      rgba(255, 255, 255, 0.06) 100%
+    );
+    transition: all 0.3s ease-out;
+  }
+
+  .glass-card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(20, 184, 166, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.13) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(20, 184, 166, 0.08) 100%
+    );
+  }
+
+  /* ── Page shell with gradient mesh ── */
+  .dashboard-page {
+    position: relative;
+    min-height: 100%;
+    overflow: hidden;
+    color: #ffffff;
+    background-color: #010d0a;
+    background-image: radial-gradient(ellipse 70% 55% at 0% 0%, rgba(5, 44, 36, 0.9) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 40% at 100% 0%, rgba(4, 28, 22, 0.6) 0%, transparent 50%),
+      linear-gradient(145deg, #041c16 0%, #010d0a 40%, #000000 100%);
+  }
+
+  .dashboard-page::before,
+  .dashboard-page::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(80px);
+  }
+
+  .dashboard-page::before {
+    width: 500px;
+    height: 500px;
+    top: -150px;
+    left: -100px;
+    background: radial-gradient(circle, rgba(5, 44, 36, 0.5) 0%, transparent 70%);
+  }
+
+  .dashboard-page::after {
+    width: 400px;
+    height: 400px;
+    bottom: -120px;
+    right: -80px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, transparent 70%);
+  }
+
+  /* ── Glass sidebar ── */
+  .glass-sidebar {
+    position: relative;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(1, 13, 10, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* ── Glass header ── */
+  .glass-header {
+    position: relative;
+    z-index: 10;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(1, 13, 10, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ── Form controls ── */
+  .dashboard-input {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.06);
+    padding: 0.625rem 0.75rem;
+    color: #ffffff;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .dashboard-input::placeholder {
+    color: rgba(255, 255, 255, 0.42);
+  }
+
+  .dashboard-input:focus {
+    outline: none;
+    border-color: rgba(20, 184, 166, 0.5);
+    box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+  }
+
+  /* Style select dropdown options */
+  select.dashboard-input option {
+    background-color: #010d0a;
+    color: #ffffff;
+  }
+
+  .dashboard-table {
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  /* ── Nav active pill ── */
+  .nav-active {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    color: #ffffff;
+    background-color: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    transition: all 0.2s;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  /* ── Icon bubble ── */
+  .glass-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-image: linear-gradient(135deg, rgba(20, 184, 166, 0.35) 0%, rgba(16, 185, 129, 0.15) 100%);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  /* ── Ticker ── */
+  .glass-ticker {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    background-color: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(251, 191, 36, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.03) 50%,
+      rgba(255, 255, 255, 0.06) 100%
+    );
+  }
+
+  .ticker-scroll {
+    animation: ticker 40s linear infinite;
+  }
+
+  @keyframes ticker {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  /* ── Login page orbs ── */
+  .login-bg {
+    position: relative;
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: #010d0a;
+    background-image: radial-gradient(ellipse 70% 55% at 0% 0%, rgba(5, 44, 36, 0.9) 0%, transparent 55%),
+      linear-gradient(145deg, #041c16 0%, #010d0a 50%, #000000 100%);
+  }
+
+  .login-bg::before {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    border-radius: 9999px;
+    width: 500px;
+    height: 500px;
+    top: -150px;
+    left: -100px;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.2) 0%, transparent 65%);
+    filter: blur(60px);
+  }
+
+  .login-bg::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    border-radius: 9999px;
+    width: 400px;
+    height: 400px;
+    bottom: -100px;
+    right: -80px;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.1) 0%, transparent 65%);
+    filter: blur(50px);
+  }
+
+  .login-card {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 28rem;
+    border-radius: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background-color: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ── Metric card icon ── */
+  .metric-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    background-color: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+  }
+
+  /* ── Profile avatar ── */
+  .profile-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 9999px;
+    background-color: #10b981;
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* ── Logout button ── */
+  .logout-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.04);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s;
+  }
+
+  .logout-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+@layer utilities {
+  .shadow-glass {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .shadow-glass-lg {
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+
+  .shadow-glass-glow {
+    box-shadow: 0 0 40px rgba(20, 184, 166, 0.15), 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* ─── Report print-only area (hidden on screen) ─── */
+.report-print-area {
+  display: none;
+}
+
+@media print {
+  /* ── Global reset ── */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+  }
+
+  /* ── Hide chrome ── */
+  .glass-sidebar,
+  .glass-header,
+  .print-hidden,
+  .logout-btn {
+    display: none !important;
+  }
+
+  /* ── Base layout for all print views ── */
+  .dashboard-page,
+  .glass-card,
+  .dashboard-table {
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border-color: #e2e8f0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .dashboard-page::before,
+  .dashboard-page::after,
+  .glass-card::before {
+    display: none !important;
+  }
+
+  .dashboard-page,
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ── Invoice receipt printing ── */
+  .sale-invoice-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+  }
+
+  .sale-invoice-page ~ .report-print-area {
+    display: none !important;
+  }
+
+  .invoice-print-area {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 4mm !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+  }
+
+  .invoice-print-area * {
+    color: #000000 !important;
+  }
+
+  /* ── A4 Reports PDF ── */
+  .report-print-area {
+    display: block !important;
+    position: relative;
+    width: 100%;
+    color: #1e293b;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  .report-print-area * {
+    color: #1e293b !important;
+  }
+
+  /* ── Report header ── */
+  .report-header {
+    text-align: center;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 12pt;
+    margin-bottom: 16pt;
+  }
+
+  .report-header h1 {
+    font-size: 20pt;
+    font-weight: 800;
+    color: #0f172a !important;
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+
+  .report-header h2 {
+    font-size: 13pt;
+    font-weight: 600;
+    color: #334155 !important;
+    margin: 4pt 0 0;
+  }
+
+  .report-meta {
+    font-size: 8.5pt;
+    color: #64748b !important;
+    margin-top: 8pt;
+  }
+
+  /* ── Sections ── */
+  .report-section {
+    margin-bottom: 18pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .report-section h3 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #0f172a !important;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 4pt;
+    margin: 0 0 10pt;
+  }
+
+  /* ── KPI grid ── */
+  .report-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8pt;
+  }
+
+  .report-kpi {
+    border: 1px solid #e2e8f0;
+    border-radius: 6pt;
+    padding: 10pt 12pt;
+    text-align: center;
+  }
+
+  .report-kpi-label {
+    display: block;
+    font-size: 7.5pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b !important;
+    margin-bottom: 4pt;
+  }
+
+  .report-kpi-value {
+    display: block;
+    font-size: 14pt;
+    font-weight: 700;
+    color: #0f172a !important;
+  }
+
+  /* ── Tables ── */
+  .report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-bottom: 8pt;
+  }
+
+  .report-table caption {
+    text-align: left;
+    font-weight: 700;
+    font-size: 9pt;
+    color: #334155 !important;
+    padding-bottom: 4pt;
+    caption-side: top;
+  }
+
+  .report-table thead tr {
+    background-color: #f1f5f9 !important;
+  }
+
+  .report-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569 !important;
+    padding: 6pt 8pt;
+    border-bottom: 2px solid #cbd5e1;
+  }
+
+  .report-table td {
+    padding: 5pt 8pt;
+    border-bottom: 1px solid #e2e8f0;
+    color: #1e293b !important;
+  }
+
+  .report-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* ── Side-by-side tables ── */
+  .report-tables-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160pt, 1fr));
+    gap: 12pt;
+  }
+
+  /* ── Footer ── */
+  .report-footer {
+    margin-top: 24pt;
+    padding-top: 10pt;
+    border-top: 1px solid #cbd5e1;
+    text-align: center;
+    font-size: 7.5pt;
+    color: #94a3b8 !important;
+  }
+
+  .report-footer p {
+    margin: 2pt 0;
+    color: #94a3b8 !important;
+  }
+
+  .report-muted {
+    font-size: 9pt;
+    color: #94a3b8 !important;
+    font-style: italic;
+  }
+
+  /* ── Page sizing: default A4 for reports ── */
+  @page {
+    size: A4;
+    margin: 15mm 12mm;
+  }
+
+  /* ── Invoice-specific @page ── */
+  .sale-invoice-page {
+    page: invoice;
+  }
+
+  @page invoice {
+    size: 80mm auto;
+    margin: 4mm;
+  }
+}
