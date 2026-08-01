@@ -14,6 +14,7 @@ import {
   Select,
   Textarea,
 } from '../components/ui';
+import { SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
 
 interface SettingsFormValues {
   store_name: string;
@@ -99,6 +100,11 @@ export function Settings() {
   };
 
   const handleRoleChange = async (userId: string, role: UserRole) => {
+    const selectedUser = users.find((user) => user.id === userId);
+    if (selectedUser?.email?.toLowerCase() === SUPER_ADMIN_EMAIL) {
+      setError('The super-admin account cannot be edited or downgraded.');
+      return;
+    }
     setError(null);
     setSuccess(null);
     const { error: updateError } = await userService.updateUserRole(userId, role);
@@ -180,10 +186,17 @@ export function Settings() {
                       <p className="font-medium text-dashboard-text-primary">{user.full_name || user.email || 'Unnamed User'}</p>
                       <p className="text-xs text-dashboard-text-sub">{user.email || '-'}</p>
                     </div>
-                    <Select value={user.role} onChange={(event) => void handleRoleChange(user.id, event.target.value as UserRole)} className="max-w-[180px]">
-                      <option value="admin">Admin</option>
-                      <option value="cashier">Cashier</option>
-                    </Select>
+                    {user.email?.toLowerCase() === SUPER_ADMIN_EMAIL ? (
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full border border-dashboard-accent/30 bg-dashboard-accent/10 px-3 py-1.5 text-xs font-semibold text-dashboard-accent">Super Admin</span>
+                        <span className="text-xs text-dashboard-text-sub">Locked</span>
+                      </div>
+                    ) : (
+                      <Select value={user.role} onChange={(event) => void handleRoleChange(user.id, event.target.value as UserRole)} className="max-w-[180px]">
+                        <option value="admin">Admin</option>
+                        <option value="cashier">Cashier</option>
+                      </Select>
+                    )}
                   </div>
                 </div>
               ))}
