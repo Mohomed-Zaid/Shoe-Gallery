@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { type ReactNode } from 'react';
 import { LoadingSpinner } from './ui';
 import type { UserRole } from '../types';
+import { isBusinessAdminEmail } from '../services/subscriptionService';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -12,6 +13,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, requireAdmin = false, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, loading } = useAuth();
+  const effectiveRole: UserRole | undefined = isBusinessAdminEmail(user?.email) ? 'admin' : profile?.role;
 
   if (loading) {
     return (
@@ -25,11 +27,11 @@ export function ProtectedRoute({ children, requireAdmin = false, allowedRoles }:
     return <Navigate to="/login" replace />;
   }
 
-  if (requireAdmin && profile?.role !== 'admin') {
+  if (requireAdmin && effectiveRole !== 'admin') {
     return <Navigate to="/" replace />;
   }
 
-  if (allowedRoles && profile?.role && !allowedRoles.includes(profile.role)) {
+  if (allowedRoles && effectiveRole && !allowedRoles.includes(effectiveRole)) {
     return <Navigate to="/" replace />;
   }
 

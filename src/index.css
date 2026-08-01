@@ -367,6 +367,69 @@
     line-height: 1.5 !important;
   }
 
+  /* Purchase document: dedicated, aligned A4 layout */
+  main > div.space-y-6:has(> section.glass-card) > :first-child {
+    display: none !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 8mm !important;
+    overflow: visible !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0 !important;
+    color: #0f172a !important;
+    page-break-inside: auto;
+  }
+
+  main > div.space-y-6 > section.glass-card:nth-of-type(2) {
+    display: none !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type * {
+    color: #0f172a !important;
+    text-shadow: none !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type .dashboard-table {
+    width: 100% !important;
+    overflow: visible !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0 !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type th,
+  main > div.space-y-6 > section.glass-card:first-of-type td {
+    padding: 6pt 5pt !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    vertical-align: middle !important;
+    overflow-wrap: anywhere;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type th:nth-child(n+3),
+  main > div.space-y-6 > section.glass-card:first-of-type td:nth-child(n+3) {
+    text-align: right !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type thead {
+    display: table-header-group;
+    background: #f1f5f9 !important;
+  }
+
+  main > div.space-y-6 > section.glass-card:first-of-type tr {
+    page-break-inside: avoid;
+  }
+
   /* ── Hide chrome ── */
   .glass-sidebar,
   .glass-header,

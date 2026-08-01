@@ -1,18 +1,19 @@
 import { type ReactNode, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, Menu, Sun, X } from 'lucide-react';
+import { CreditCard, LogOut, Menu, Sun, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getNavItemsForRole, getPageTitle } from '../utils/navigation';
+import { isBusinessAdminEmail, SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const menuItems = getNavItemsForRole(profile?.role);
+  const menuItems = getNavItemsForRole(isBusinessAdminEmail(user?.email) ? 'admin' : profile?.role);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const displayName = profile?.full_name || profile?.email?.split('@')[0] || 'User';
@@ -57,6 +58,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <span className="font-medium">{item.label}</span>
               </NavLink>
             ))}
+            {user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL && (
+              <NavLink to="/admin/subscription" className={({ isActive }) => `nav-item ${isActive ? 'nav-active' : 'text-dashboard-text-label hover:bg-dashboard-hover hover:text-dashboard-text-primary'}`}>
+                <CreditCard size={18} /><span className="font-medium">Subscription Management</span>
+              </NavLink>
+            )}
           </nav>
         </aside>
       )}

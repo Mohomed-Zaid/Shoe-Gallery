@@ -45,6 +45,7 @@ export function getNavItemsForRole(role: UserRole | undefined): NavItem[] {
 }
 
 export function getPageTitle(pathname: string): string {
+  if (pathname === '/admin/subscription') return 'Subscription Management';
   const item = navItems.find((nav) => nav.path === pathname);
   if (item) return item.label;
   if (pathname.startsWith('/products/')) return 'Product Details';

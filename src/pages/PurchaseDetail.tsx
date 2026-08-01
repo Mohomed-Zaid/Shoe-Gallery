@@ -1,168 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import type { Supplier, ProductVariant, Product } from '../types';
-import * as purchaseService from '../services/purchaseService';
-import { getErrorMessage } from '../utils/errors';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, Ban, Banknote, Printer } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import type { PurchaseRecord } from '../types/purchase';
+import type { StoreSettings } from '../types';
+import { cancelPurchase, getPurchaseById } from '../services/purchaseService';
+import { getStoreSettings } from '../services/settingsService';
 import { formatCurrency, formatDate } from '../utils/format';
-import {
-  Alert,
-  Button,
-  DataTable,
-  LoadingSpinner,
-  PageHeader,
-} from '../components/ui';
+import { Alert, Button, DataTable, LoadingSpinner, Modal, PageHeader, Textarea } from '../components/ui';
+import { SupplierPaymentModal } from '../components/purchases/SupplierPaymentModal';
+import { getErrorMessage } from '../utils/errors';
 
-interface PurchaseItem {
-  id: string;
-  variant: ProductVariant & { product: Product };
-  quantity: number;
-  cost_price: number;
-}
+let activeAutoPrintId: string | null = null;
 
-interface PurchaseWithRelations {
-  id: string;
-  supplier: Supplier | null;
-  purchase_date: string;
-  total_amount: number;
-  payment_status: string;
-  created_at: string;
-  purchase_items: PurchaseItem[];
-}
-
-export function PurchaseDetail() {
-  const { id } = useParams<{ id: string }>();
-  const [purchase, setPurchase] = useState<PurchaseWithRelations | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchPurchase = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error: fetchError } = await purchaseService.getPurchaseById(id);
-      if (fetchError) throw fetchError;
-      if (!data) throw new Error('Purchase not found');
-      setPurchase(data as PurchaseWithRelations);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchPurchase();
-  }, [fetchPurchase]);
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-green-500/20 text-green-300';
-      case 'partial':
-        return 'bg-yellow-500/20 text-yellow-300';
-      case 'unpaid':
-      default:
-        return 'bg-red-500/20 text-red-300';
-    }
-  };
-
-  if (loading) return <LoadingSpinner />;
-  if (!purchase) return <Alert message={error ?? 'Purchase not found'} />;
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Purchase #${purchase.id.slice(0, 8)}`}
-        description="Purchase details"
-        action={
-          <Link to="/purchases">
-            <Button variant="secondary">
-              <ArrowLeft size={18} />
-              Back to Purchases
-            </Button>
-          </Link>
-        }
-      />
-
-      {error && <Alert message={error} />}
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="glass-card p-6 lg:col-span-1 space-y-4">
-          <h3 className="text-lg font-semibold text-dashboard-text-primary">Purchase Info</h3>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-dashboard-text-label">Supplier</dt>
-              <dd className="font-medium text-dashboard-text-primary">{purchase.supplier?.name || '-'}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-dashboard-text-label">Purchase Date</dt>
-              <dd className="font-medium text-dashboard-text-primary">{formatDate(purchase.purchase_date)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-dashboard-text-label">Total Amount</dt>
-              <dd className="font-medium text-dashboard-text-primary">{formatCurrency(purchase.total_amount)}</dd>
-            </div>
-            <div className="flex justify-between items-center">
-              <dt className="text-dashboard-text-label">Status</dt>
-              <dd>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(purchase.payment_status)}`}>
-                  {purchase.payment_status}
-                </span>
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="lg:col-span-2">
-          <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-dashboard-text-primary mb-4">Purchase Items</h3>
-            <DataTable
-              columns={[
-                { key: 'product', header: 'Product' },
-                { key: 'size', header: 'Size' },
-                { key: 'color', header: 'Color' },
-                { key: 'quantity', header: 'Quantity' },
-                { key: 'cost_price', header: 'Cost Price' },
-                { key: 'total', header: 'Total' },
-              ]}
-              isEmpty={purchase.purchase_items.length === 0}
-              emptyMessage="No items found for this purchase"
-            >
-              {purchase.purchase_items.map((item) => (
-                <tr key={item.id} className="hover:bg-dashboard-hover">
-                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-dashboard-text-primary">
-                    {item.variant.product.name}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-sub">
-                    {item.variant.size}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-sub">
-                    {item.variant.color}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-primary">
-                    {item.quantity}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-sub">
-                    {formatCurrency(item.cost_price)}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-dashboard-text-primary">
-                    {formatCurrency(item.quantity * item.cost_price)}
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-
-            <div className="flex justify-end pt-4 border-t border-white/10">
-              <div className="text-right">
-                <div className="text-sm text-dashboard-text-sub">Total Amount</div>
-                <div className="text-2xl font-bold text-dashboard-text-primary">{formatCurrency(purchase.total_amount)}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+export function PurchaseDetail(){const {id}=useParams<{id:string}>();const [params]=useSearchParams();const [purchase,setPurchase]=useState<PurchaseRecord|null>(null);const [store,setStore]=useState<StoreSettings|null>(null);const [loading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);const [payment,setPayment]=useState(false);const [cancel,setCancel]=useState(false);const [reason,setReason]=useState('');const [cancelling,setCancelling]=useState(false);
+const load=useCallback(async()=>{if(!id)return;setLoading(true);try{const [p,s]=await Promise.all([getPurchaseById(id),getStoreSettings()]);setPurchase(p);setStore((s.data as StoreSettings|null)??null);setError(null);}catch(e){setError(getErrorMessage(e,'Unable to load purchase.'));}finally{setLoading(false);}},[id]);useEffect(()=>{void load();},[load]);useEffect(()=>{if(!purchase||params.get('print')!=='1'||activeAutoPrintId===purchase.id)return;activeAutoPrintId=purchase.id;const url=new URL(window.location.href);url.searchParams.delete('print');window.history.replaceState(window.history.state,'',`${url.pathname}${url.search}${url.hash}`);setTimeout(()=>{window.print();activeAutoPrintId=null;},250);},[purchase,params]);
+const doCancel=async()=>{if(!purchase||!reason.trim()){setError('A cancellation reason is required.');return;}setCancelling(true);try{await cancelPurchase(purchase.id,reason);setCancel(false);await load();}catch(e){setError(getErrorMessage(e,'Cancellation failed.'));}finally{setCancelling(false);}};
+if(loading)return <LoadingSpinner/>;if(!purchase)return <Alert message={error||'Purchase not found.'}/>;return <div className="space-y-6"><PageHeader title={purchase.purchase_number} description="Internal purchase document" action={<div className="flex flex-wrap gap-2 print-hidden"><Link to="/purchases"><Button variant="secondary"><ArrowLeft size={17}/>Back</Button></Link><Button variant="secondary" onClick={()=>window.print()}><Printer size={17}/>Print / Save PDF</Button>{purchase.status==='completed'&&purchase.balance_amount>0&&<Button onClick={()=>setPayment(true)}><Banknote size={17}/>Record Payment</Button>}{purchase.status==='completed'&&<Button variant="danger" onClick={()=>setCancel(true)}><Ban size={17}/>Cancel</Button>}</div>}/>{error&&<Alert message={error}/>}<section className="glass-card p-6 print:border-0"><div className="relative z-10"><div className="mb-6 flex flex-col justify-between gap-4 border-b border-white/10 pb-5 sm:flex-row"><div><h2 className="text-2xl font-bold text-dashboard-text-primary">{store?.store_name||'Shoe Gallery'}</h2><p className="text-sm text-dashboard-text-sub">{store?.address||''}</p><p className="text-sm text-dashboard-text-sub">{store?.phone||''}</p></div><div className="sm:text-right"><p className="text-xl font-bold text-dashboard-text-primary">{purchase.purchase_number}</p><p className="text-sm text-dashboard-text-sub">Purchase date: {formatDate(purchase.purchase_date)}</p><p className="text-sm capitalize text-dashboard-text-sub">Status: {purchase.status}</p></div></div><div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><p className="text-xs uppercase text-dashboard-text-sub">Supplier</p><p className="font-semibold text-dashboard-text-primary">{purchase.supplier?.name}</p><p className="text-sm text-dashboard-text-sub">{purchase.supplier?.phone}</p></div><div><p className="text-xs uppercase text-dashboard-text-sub">Supplier invoice</p><p className="text-dashboard-text-primary">{purchase.supplier_invoice_number||'—'}</p></div><div><p className="text-xs uppercase text-dashboard-text-sub">Created by</p><p className="text-dashboard-text-primary">{purchase.created_by_email||'—'}</p></div><div><p className="text-xs uppercase text-dashboard-text-sub">Payment</p><p className="capitalize text-dashboard-text-primary">{purchase.payment_status} {purchase.payment_method?`· ${purchase.payment_method}`:''}</p></div></div><DataTable columns={[{key:'product',header:'Product'},{key:'variant',header:'Size / Colour'},{key:'qty',header:'Qty'},{key:'cost',header:'Cost'},{key:'discount',header:'Discount'},{key:'total',header:'Line Total'}]} isEmpty={!purchase.purchase_items.length}>{purchase.purchase_items.map(i=><tr key={i.id}><td className="px-4 py-3 text-dashboard-text-primary">{i.variant.product.name}</td><td className="px-4 py-3 text-dashboard-text-sub">{i.variant.size} / {i.variant.color}</td><td className="px-4 py-3">{i.quantity}</td><td className="px-4 py-3">{formatCurrency(i.cost_price)}</td><td className="px-4 py-3">{formatCurrency(i.line_discount)}</td><td className="px-4 py-3 font-semibold">{formatCurrency(i.line_total)}</td></tr>)}</DataTable><div className="mt-6 ml-auto max-w-sm space-y-2">{[['Subtotal',purchase.subtotal],['Discount',purchase.discount_amount],['Additional cost',purchase.additional_cost],['Total',purchase.total_amount],['Paid',purchase.paid_amount],['Balance',purchase.balance_amount]].map(([l,v])=><div key={String(l)} className="flex justify-between border-b border-white/5 py-1"><span className="text-dashboard-text-sub">{l}</span><strong>{formatCurrency(Number(v))}</strong></div>)}</div>{purchase.notes&&<div className="mt-6"><p className="text-xs uppercase text-dashboard-text-sub">Notes</p><p className="mt-1 text-dashboard-text-primary">{purchase.notes}</p></div>}{purchase.cancellation_reason&&<div className="mt-6"><Alert message={`Cancelled: ${purchase.cancellation_reason}`}/></div>}</div></section><section className="glass-card p-5"><h3 className="relative z-10 mb-4 font-semibold text-dashboard-text-primary">Payment history</h3><div className="relative z-10 space-y-2">{purchase.supplier_payments.length?purchase.supplier_payments.map(x=><div key={x.id} className="flex flex-col justify-between rounded-lg border border-white/10 p-3 sm:flex-row"><span>{formatDate(x.payment_date)} · {x.payment_method}{x.reference_number?` · ${x.reference_number}`:''}</span><strong>{formatCurrency(x.amount)}</strong></div>):<p className="text-sm text-dashboard-text-sub">No payments recorded.</p>}</div></section>{payment&&<SupplierPaymentModal purchaseId={purchase.id} balance={purchase.balance_amount} onClose={()=>setPayment(false)} onSaved={()=>{setPayment(false);void load();}}/>}{cancel&&<Modal title="Cancel purchase" onClose={()=>setCancel(false)}><p className="mb-4 text-sm text-dashboard-text-sub">Stock will be reversed. Cancellation is blocked if any item no longer has enough stock.</p><Textarea label="Cancellation reason" value={reason} onChange={e=>setReason(e.target.value)}/><div className="mt-5 flex justify-end gap-3"><Button variant="ghost" onClick={()=>setCancel(false)}>Keep purchase</Button><Button variant="danger" disabled={cancelling} onClick={doCancel}>{cancelling?'Cancelling…':'Confirm cancellation'}</Button></div></Modal>}</div>}

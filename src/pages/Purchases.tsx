@@ -1,119 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { Eye, FilePenLine, Plus, Printer } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Eye } from 'lucide-react';
-import type { Purchase, Supplier, ProductVariant, Product } from '../types';
-import * as purchaseService from '../services/purchaseService';
-import { getErrorMessage } from '../utils/errors';
+import type { Supplier } from '../types';
+import type { PurchaseRecord } from '../types/purchase';
+import { getPurchases } from '../services/purchaseService';
+import { getSuppliers } from '../services/supplierService';
 import { formatCurrency, formatDate } from '../utils/format';
-import {
-  Alert,
-  Button,
-  DataTable,
-  LoadingSpinner,
-  PageHeader,
-} from '../components/ui';
+import { Alert, Button, DataTable, Input, LoadingSpinner, PageHeader, Pagination, Select } from '../components/ui';
 
-interface PurchaseWithRelations extends Purchase {
-  supplier: Supplier | null;
-  purchase_items: (Purchase & {
-    variant: ProductVariant & {
-      product: Product;
-    };
-  })[];
-}
-
-export function Purchases() {
-  const navigate = useNavigate();
-  const [purchases, setPurchases] = useState<PurchaseWithRelations[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchPurchases = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error: fetchError } = await purchaseService.getPurchases();
-    if (fetchError) {
-      setError(getErrorMessage(fetchError));
-    } else {
-      setPurchases((data as PurchaseWithRelations[]) ?? []);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchPurchases();
-  }, [fetchPurchases]);
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-green-500/20 text-green-300';
-      case 'partial':
-        return 'bg-yellow-500/20 text-yellow-300';
-      case 'unpaid':
-      default:
-        return 'bg-red-500/20 text-red-300';
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Purchases"
-        description="Track and manage your purchases"
-        action={
-          <Button onClick={() => navigate('/purchases/create')}>
-            <Plus size={20} />
-            Add Purchase
-          </Button>
-        }
-      />
-
-      {error && <Alert message={error} />}
-
-      {loading ? (
-        <LoadingSpinner />
-      ) : (
-        <DataTable
-          columns={[
-            { key: 'id', header: 'Purchase #' },
-            { key: 'supplier', header: 'Supplier' },
-            { key: 'date', header: 'Date' },
-            { key: 'total', header: 'Total Amount' },
-            { key: 'status', header: 'Status' },
-            { key: 'actions', header: 'Actions', className: 'text-right' },
-          ]}
-          isEmpty={purchases.length === 0}
-          emptyMessage="No purchases found"
-        >
-          {purchases.map((purchase) => (
-            <tr key={purchase.id} className="hover:bg-dashboard-hover">
-              <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-dashboard-text-primary">
-                #{purchase.id.slice(0, 8)}
-              </td>
-              <td className="px-6 py-4 text-sm text-dashboard-text-sub">
-                {purchase.supplier?.name || '-'}
-              </td>
-              <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-sub">
-                {formatDate(purchase.purchase_date)}
-              </td>
-              <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">
-                {formatCurrency(purchase.total_amount)}
-              </td>
-              <td className="px-6 py-4">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(purchase.payment_status)}`}>
-                  {purchase.payment_status}
-                </span>
-              </td>
-              <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                <Link to={`/purchases/${purchase.id}`} className="text-dashboard-text-sub hover:text-dashboard-text-primary">
-                  <Eye size={18} />
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </DataTable>
-      )}
-    </div>
-  );
-}
+const badge=(value:string)=>value==='paid'||value==='completed'?'bg-green-500/15 text-green-300':value==='partial'||value==='draft'?'bg-amber-500/15 text-amber-300':'bg-red-500/15 text-red-300';
+export function Purchases(){const navigate=useNavigate();const [rows,setRows]=useState<PurchaseRecord[]>([]);const [suppliers,setSuppliers]=useState<Supplier[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);const [search,setSearch]=useState('');const [supplier,setSupplier]=useState('');const [payment,setPayment]=useState('');const [from,setFrom]=useState('');const [to,setTo]=useState('');const [page,setPage]=useState(1);const [count,setCount]=useState(0);const pageSize=10;
+useEffect(()=>{void getSuppliers().then(r=>setSuppliers((r.data??[]) as Supplier[]));},[]);
+useEffect(()=>{const timer=setTimeout(()=>{setLoading(true);void getPurchases({search,supplierId:supplier,paymentStatus:payment,from,to,page,pageSize}).then(({data,error,count})=>{if(error)setError(error.message);else{setRows((data??[]) as unknown as PurchaseRecord[]);setCount(count??0);setError(null);}}).finally(()=>setLoading(false));},250);return()=>clearTimeout(timer);},[search,supplier,payment,from,to,page]);
+return <div className="space-y-6"><PageHeader title="Purchase Management" description="Purchases, supplier credit, stock receipts and payments." action={<Button onClick={()=>navigate('/purchases/create')}><Plus size={18}/>New Purchase</Button>}/>{error&&<Alert message={error}/>}<div className="glass-card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5"><Input placeholder="Purchase or supplier invoice #" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/><Select value={supplier} onChange={e=>{setSupplier(e.target.value);setPage(1);}}><option value="">All suppliers</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select><Select value={payment} onChange={e=>{setPayment(e.target.value);setPage(1);}}><option value="">All payments</option><option value="paid">Paid</option><option value="partial">Partial</option><option value="unpaid">Unpaid</option></Select><Input aria-label="From date" type="date" value={from} onChange={e=>setFrom(e.target.value)}/><Input aria-label="To date" type="date" value={to} onChange={e=>setTo(e.target.value)}/></div>{loading?<LoadingSpinner/>:<><DataTable columns={[{key:'number',header:'Purchase #'},{key:'invoice',header:'Supplier Invoice'},{key:'date',header:'Date'},{key:'supplier',header:'Supplier'},{key:'total',header:'Total'},{key:'paid',header:'Paid'},{key:'balance',header:'Balance'},{key:'payment',header:'Payment'},{key:'status',header:'Status'},{key:'created',header:'Created By'},{key:'actions',header:'Actions'}]} isEmpty={!rows.length} emptyMessage="No purchases match these filters.">{rows.map(p=><tr key={p.id} className="hover:bg-dashboard-hover"><td className="px-4 py-3 font-semibold text-dashboard-text-primary">{p.purchase_number}</td><td className="px-4 py-3 text-dashboard-text-sub">{p.supplier_invoice_number||'—'}</td><td className="px-4 py-3 text-dashboard-text-sub">{formatDate(p.purchase_date)}</td><td className="px-4 py-3 text-dashboard-text-primary">{p.supplier?.name||'—'}</td><td className="px-4 py-3 text-dashboard-text-primary">{formatCurrency(p.total_amount)}</td><td className="px-4 py-3 text-dashboard-text-sub">{formatCurrency(p.paid_amount)}</td><td className="px-4 py-3 text-dashboard-text-sub">{formatCurrency(p.balance_amount)}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs capitalize ${badge(p.payment_status)}`}>{p.payment_status}</span></td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs capitalize ${badge(p.status)}`}>{p.status}</span></td><td className="px-4 py-3 text-xs text-dashboard-text-sub">{p.created_by_email||'—'}</td><td className="px-4 py-3"><div className="flex gap-2"><Link title="View" to={`/purchases/${p.id}`}><Eye size={17}/></Link><Link title="Print" to={`/purchases/${p.id}?print=1`}><Printer size={17}/></Link>{p.status==='draft'&&<Link title="Edit draft" to={`/purchases/${p.id}/edit`}><FilePenLine size={17}/></Link>}</div></td></tr>)}</DataTable><Pagination page={page} totalPages={Math.max(1,Math.ceil(count/pageSize))} onPageChange={setPage}/></>}</div>}

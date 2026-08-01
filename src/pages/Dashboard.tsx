@@ -4,6 +4,7 @@ import {
   BadgeDollarSign,
   BarChart3,
   Building2,
+  CalendarClock,
   DollarSign,
   Package,
   ShoppingCart,
@@ -30,6 +31,7 @@ import { TopProductsChart } from '../components/charts/TopProductsChart';
 import { CategoryPieChart } from '../components/charts/CategoryPieChart';
 import { MonthlyRevenueChart } from '../components/charts/MonthlyRevenueChart';
 import { formatCurrency, formatDateTime } from '../utils/format';
+import { getSubscriptionStatus, SUBSCRIPTION_QUERY_KEY } from '../services/subscriptionService';
 
 const STORE_NAME = 'Shoe Gallery';
 
@@ -109,6 +111,19 @@ export function Dashboard() {
 
   const QUERY_OPTS = { staleTime: 60_000, refetchInterval: 120_000 };
 
+  const { data: subscription } = useQuery({
+    queryKey: SUBSCRIPTION_QUERY_KEY,
+    queryFn: getSubscriptionStatus,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const subscriptionExpiry = subscription?.expires_at
+    ? new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'long',
+        timeStyle: 'short',
+      }).format(new Date(subscription.expires_at))
+    : 'Unavailable';
+
   const { data: cards, isLoading: cardsLoading, error: cardsError } = useQuery({
     queryKey: ['dashboardCards'],
     queryFn: getDashboardCards,
@@ -170,6 +185,28 @@ export function Dashboard() {
           New Sale
           <ArrowUpRight size={13} />
         </Link>
+      </div>
+
+      <div className="glass-card border-dashboard-accent/25 p-4 md:p-5">
+        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="glass-icon h-11 w-11 shrink-0 text-dashboard-accent">
+              <CalendarClock size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-dashboard-text-sub">Service subscription expiry</p>
+              <p className="mt-1 font-semibold text-dashboard-text-primary">{subscriptionExpiry}</p>
+            </div>
+          </div>
+          {subscription && (
+            <div className="sm:text-right">
+              <p className="text-sm font-semibold text-dashboard-accent">
+                {subscription.days_remaining} {subscription.days_remaining === 1 ? 'day' : 'days'} remaining
+              </p>
+              <p className="mt-0.5 text-xs capitalize text-dashboard-text-sub">Status: {subscription.status}</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {cardsError && <Alert message="Unable to load dashboard data." />}

@@ -1,84 +1,41 @@
 import { supabase } from './supabase';
-import type { Purchase } from '../types';
-import { adjustStock } from './inventoryService';
+import type { PurchaseFilters, PurchasePayload, PurchaseRecord } from '../types/purchase';
 
-export async function getPurchases() {
-  return supabase
-    .from('purchases')
-    .select(`
-      *,
-      supplier:suppliers(*),
-      purchase_items:purchase_items(*, variant:product_variants(*, product:products(*)))
-    `)
-    .order('created_at', { ascending: false });
+const purchaseSelect = `*, supplier:suppliers(*),
+  purchase_items(*, variant:product_variants(*, product:products(*))), supplier_payments(*)`;
+
+export async function getPurchases(filters: PurchaseFilters) {
+  let query = supabase.from('purchases').select(purchaseSelect, { count: 'exact' });
+  if (filters.search) query = query.or(`purchase_number.ilike.%${filters.search}%,supplier_invoice_number.ilike.%${filters.search}%`);
+  if (filters.supplierId) query = query.eq('supplier_id', filters.supplierId);
+  if (filters.paymentStatus) query = query.eq('payment_status', filters.paymentStatus);
+  if (filters.from) query = query.gte('purchase_date', filters.from);
+  if (filters.to) query = query.lte('purchase_date', filters.to);
+  const from = (filters.page - 1) * filters.pageSize;
+  return query.order('created_at', { ascending: false }).range(from, from + filters.pageSize - 1);
 }
 
-export async function getPurchaseById(id: string) {
-  return supabase
-    .from('purchases')
-    .select(`
-      *,
-      supplier:suppliers(*),
-      purchase_items:purchase_items(*, variant:product_variants(*, product:products(*)))
-    `)
-    .eq('id', id)
-    .maybeSingle();
+export async function getPurchaseById(id: string): Promise<PurchaseRecord> {
+  const { data, error } = await supabase.from('purchases').select(purchaseSelect).eq('id', id).single();
+  if (error) throw error;
+  return data as unknown as PurchaseRecord;
 }
 
-export async function createPurchase(data: {
-  supplier_id: string | null;
-  purchase_date?: string;
-  payment_status?: string;
-  items: {
-    variant_id: string;
-    quantity: number;
-    cost_price: number;
-  }[];
-}) {
-  const totalAmount = data.items.reduce((sum, item) => sum + item.quantity * item.cost_price, 0);
-  
-  const { data: purchase, error: purchaseError } = await supabase
-    .from('purchases')
-    .insert({
-      supplier_id: data.supplier_id,
-      purchase_date: data.purchase_date || new Date().toISOString(),
-      total_amount: totalAmount,
-      payment_status: data.payment_status || 'unpaid',
-    })
-    .select()
-    .single();
-
-  if (purchaseError) {
-    throw purchaseError;
-  }
-
-  const purchaseItemsData = data.items.map(item => ({
-    purchase_id: purchase.id,
-    variant_id: item.variant_id,
-    quantity: item.quantity,
-    cost_price: item.cost_price,
-  }));
-
-  const { error: itemsError } = await supabase
-    .from('purchase_items')
-    .insert(purchaseItemsData);
-
-  if (itemsError) {
-    throw itemsError;
-  }
-
-  // Update stock and inventory history
-  for (const item of data.items) {
-    await adjustStock(item.variant_id, 'add', item.quantity, `Purchase #${purchase.id}`);
-  }
-
-  return purchase;
+export async function savePurchase(payload: PurchasePayload): Promise<string> {
+  const { data, error } = await supabase.rpc('save_purchase', { p_payload: payload });
+  if (error) throw error;
+  return data as string;
 }
 
-export async function updatePurchase(id: string, data: Partial<Purchase>) {
-  return supabase.from('purchases').update(data).eq('id', id);
+export async function recordSupplierPayment(purchaseId: string, amount: number, paymentMethod: string, referenceNumber: string, notes: string) {
+  const { error } = await supabase.rpc('record_supplier_payment', {
+    p_purchase_id: purchaseId, p_amount: amount, p_payment_method: paymentMethod,
+    p_reference_number: referenceNumber || null, p_notes: notes || null,
+  });
+  if (error) throw error;
 }
 
-export async function deletePurchase(id: string) {
-  return supabase.from('purchases').delete().eq('id', id);
+export async function cancelPurchase(purchaseId: string, reason: string) {
+  const { error } = await supabase.rpc('cancel_purchase', { p_purchase_id: purchaseId, p_reason: reason });
+  if (error) throw error;
 }

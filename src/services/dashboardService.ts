@@ -95,13 +95,13 @@ export async function getDashboardCards(): Promise<DashboardCards> {
   ] = await Promise.all([
     supabase
       .from('sales')
-      .select('total_amount')
+      .select('id, total_amount')
       .eq('status', 'completed')
       .gte('created_at', todayStart)
       .lte('created_at', todayEnd),
     supabase
       .from('sales')
-      .select('total_amount')
+      .select('id, total_amount')
       .eq('status', 'completed')
       .gte('created_at', monthStart),
     supabase.from('products').select('id', { count: 'exact', head: true }),
@@ -111,13 +111,12 @@ export async function getDashboardCards(): Promise<DashboardCards> {
     supabase
       .from('sale_items')
       .select(`
+        sale_id,
         quantity,
         selling_price,
         is_instant_sale,
         variant:product_variants(cost_price)
-      `)
-      .gte('created_at', todayStart)
-      .lte('created_at', todayEnd),
+      `),
   ]);
 
   const todayRevenue = (todaySalesRes.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
@@ -125,12 +124,16 @@ export async function getDashboardCards(): Promise<DashboardCards> {
 
   // Profit = (selling_price - cost_price) * quantity for non-instant items
   type SaleItemRow = {
+    sale_id: string;
     quantity: number;
     selling_price: number;
     is_instant_sale: boolean | null;
     variant: { cost_price: number } | null;
   };
-  const todaySaleItemsData = (saleItemsRes.data ?? []) as unknown as SaleItemRow[];
+  const allSaleItemsData = (saleItemsRes.data ?? []) as unknown as SaleItemRow[];
+  const todaySaleIds = new Set((todaySalesRes.data ?? []).map((sale) => sale.id));
+  const monthSaleIds = new Set((monthlySalesRes.data ?? []).map((sale) => sale.id));
+  const todaySaleItemsData = allSaleItemsData.filter((item) => todaySaleIds.has(item.sale_id));
   const todayProfit = todaySaleItemsData.reduce((s, item) => {
     if (item.is_instant_sale) return s + Number(item.selling_price) * item.quantity;
     const cost = Number(item.variant?.cost_price ?? 0);
@@ -138,12 +141,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
   }, 0);
 
   // Monthly profit — fetch separately for the month
-  const monthSaleItemsRes = await supabase
-    .from('sale_items')
-    .select(`quantity, selling_price, is_instant_sale, variant:product_variants(cost_price)`)
-    .gte('created_at', monthStart);
-
-  const monthSaleItemsData = (monthSaleItemsRes.data ?? []) as unknown as SaleItemRow[];
+  const monthSaleItemsData = allSaleItemsData.filter((item) => monthSaleIds.has(item.sale_id));
   const monthlyProfit = monthSaleItemsData.reduce((s, item) => {
     if (item.is_instant_sale) return s + Number(item.selling_price) * item.quantity;
     const cost = Number(item.variant?.cost_price ?? 0);
@@ -259,7 +257,7 @@ export async function getRevenueProfitTrend(): Promise<RevenueProfitPoint[]> {
   const { data: itemsData } = await supabase
     .from('sale_items')
     .select('sale_id, quantity, selling_price, is_instant_sale, variant:product_variants(cost_price)')
-    .gte('created_at', from.toISOString());
+    .in('sale_id', sales.map((sale) => sale.id));
 
   type ItemRow = { sale_id: string; quantity: number; selling_price: number; is_instant_sale: boolean | null; variant: { cost_price: number } | null };
   const items = (itemsData ?? []) as unknown as ItemRow[];
