@@ -57,10 +57,27 @@ export function SaleDetail() {
   const printTriggered = useRef(false);
 
   useEffect(() => {
-    if (!loading && location.search.includes('print=1') && sale && !printTriggered.current) {
-      printTriggered.current = true;
-      window.setTimeout(() => window.print(), 250);
-    }
+    const shouldAutoPrint = new URLSearchParams(location.search).get('print') === '1';
+    if (loading || !shouldAutoPrint || !sale || printTriggered.current) return;
+
+    printTriggered.current = true;
+    let cancelled = false;
+
+    const printReceipt = async () => {
+      await document.fonts?.ready;
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (cancelled) return;
+          window.focus();
+          window.print();
+        });
+      });
+    };
+
+    void printReceipt();
+    return () => {
+      cancelled = true;
+    };
   }, [loading, location.search, sale]);
 
   const onReturnSubmit = async (values: ReturnFormValues) => {
