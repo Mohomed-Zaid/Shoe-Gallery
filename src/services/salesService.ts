@@ -114,6 +114,9 @@ export async function createSale(payload: CreateSalePayload) {
   const discountAmount = (payload.discount_amount ?? 0) + itemDiscount;
   const taxAmount = payload.tax_amount ?? 0;
   const grandTotal = subtotal - discountAmount + taxAmount;
+  if (discountAmount < 0 || grandTotal < 0) {
+    throw new Error('Discount cannot exceed the sale amount.');
+  }
   const paidAmount =
     payload.payment_method === 'credit'
       ? payload.paid_amount ?? 0

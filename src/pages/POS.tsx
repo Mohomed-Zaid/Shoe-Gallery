@@ -71,6 +71,7 @@ export function POS() {
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDiscount, setCartDiscount] = useState(0);
+  const [amountReceived, setAmountReceived] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer' | 'credit'>('cash');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('walk-in');
   const [saleNotes, setSaleNotes] = useState('');
@@ -144,7 +145,9 @@ export function POS() {
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) ?? null;
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const lineDiscountTotal = cart.reduce((sum, item) => sum + item.discount_amount, 0);
+  const maximumCartDiscount = Math.max(subtotal - lineDiscountTotal, 0);
   const grandTotal = subtotal - lineDiscountTotal - cartDiscount;
+  const changeDue = paymentMethod === 'cash' ? Math.max(amountReceived - grandTotal, 0) : 0;
 
   const playScanSuccessSound = () => {
     try {
@@ -248,7 +251,7 @@ export function POS() {
     setCart((currentCart) =>
       currentCart.map((item) =>
         item.variant_id === variantId
-          ? { ...item, discount_amount: Math.max(discountAmount, 0) }
+          ? { ...item, discount_amount: Math.min(Math.max(discountAmount, 0), item.unit_price * item.quantity) }
           : item
       )
     );
@@ -257,6 +260,7 @@ export function POS() {
   const clearCart = useCallback(() => {
     setCart([]);
     setCartDiscount(0);
+    setAmountReceived(0);
     setSaleNotes('');
     setSelectedCustomerId('walk-in');
     setPaymentMethod('cash');
@@ -294,7 +298,7 @@ export function POS() {
       customer_name: selectedCustomer?.name ?? 'Walk-in Customer',
       payment_method: paymentMethod,
       subtotal,
-      discount_amount: lineDiscountTotal + cartDiscount,
+      discount_amount: cartDiscount,
       grand_total: grandTotal,
       notes: saleNotes,
       cart_data: cart,
@@ -351,6 +355,16 @@ export function POS() {
       return;
     }
 
+    if (cartDiscount < 0 || cartDiscount > maximumCartDiscount || grandTotal < 0) {
+      setError('The overall discount cannot exceed the sale amount.');
+      return;
+    }
+
+    if (paymentMethod === 'cash' && amountReceived < grandTotal) {
+      setError('Amount received must be equal to or greater than the total.');
+      return;
+    }
+
     try {
       setError(null);
       const sale = await salesService.createSale({
@@ -358,6 +372,7 @@ export function POS() {
         payment_method: paymentMethod,
         items: cart,
         discount_amount: cartDiscount,
+        paid_amount: paymentMethod === 'cash' ? amountReceived : paymentMethod === 'credit' ? 0 : grandTotal,
         notes: saleNotes || undefined,
       });
 
@@ -371,7 +386,7 @@ export function POS() {
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }, [activeHeldSaleId, cart, cartDiscount, clearCart, navigate, paymentMethod, saleNotes, selectedCustomerId]);
+  }, [activeHeldSaleId, amountReceived, cart, cartDiscount, clearCart, grandTotal, maximumCartDiscount, navigate, paymentMethod, saleNotes, selectedCustomerId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -463,7 +478,6 @@ export function POS() {
                         void handleBarcodeScan(barcodeInput);
                       }
                     }}
-                    onBlur={() => window.setTimeout(() => focusBarcodeInput(), 120)}
                     placeholder="Scan barcode or type and press Enter"
                     className="pl-10"
                   />
@@ -629,8 +643,28 @@ export function POS() {
                 <option value="bank_transfer">Bank Transfer</option>
                 <option value="credit">Credit</option>
               </Select>
+              {paymentMethod === 'cash' && (
+                <Input
+                  label="Amount Received"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amountReceived}
+                  onChange={(event) => setAmountReceived(Math.max(Number(event.target.value), 0))}
+                  placeholder="Enter cash received"
+                />
+              )}
               <Textarea rows={2} placeholder="Sale notes" value={saleNotes} onChange={(event) => setSaleNotes(event.target.value)} />
-              <Input type="number" min="0" step="0.01" value={cartDiscount} onChange={(event) => setCartDiscount(Number(event.target.value))} placeholder="Cart discount" />
+              <Input
+                label="Overall Sale Discount"
+                type="number"
+                min="0"
+                max={maximumCartDiscount}
+                step="0.01"
+                value={cartDiscount}
+                onChange={(event) => setCartDiscount(Math.min(Math.max(Number(event.target.value), 0), maximumCartDiscount))}
+                placeholder="Enter discount amount"
+              />
 
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between text-dashboard-text-sub">
@@ -645,6 +679,18 @@ export function POS() {
                   <span>Grand Total</span>
                   <span>{formatCurrency(grandTotal)}</span>
                 </div>
+                {paymentMethod === 'cash' && (
+                  <>
+                    <div className="flex items-center justify-between text-dashboard-text-sub">
+                      <span>Amount Received</span>
+                      <span>{formatCurrency(amountReceived)}</span>
+                    </div>
+                    <div className="flex items-center justify-between font-semibold text-dashboard-accent">
+                      <span>Change Due</span>
+                      <span>{formatCurrency(changeDue)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <Button className="w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0}>
