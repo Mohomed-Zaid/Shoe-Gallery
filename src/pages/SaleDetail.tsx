@@ -61,13 +61,11 @@ export function SaleDetail() {
     if (loading || !shouldAutoPrint || !sale || printTriggered.current) return;
 
     printTriggered.current = true;
-    let cancelled = false;
 
     const printReceipt = async () => {
       await document.fonts?.ready;
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          if (cancelled) return;
           window.focus();
           window.print();
         });
@@ -75,9 +73,6 @@ export function SaleDetail() {
     };
 
     void printReceipt();
-    return () => {
-      cancelled = true;
-    };
   }, [loading, location.search, sale]);
 
   const onReturnSubmit = async (values: ReturnFormValues) => {
