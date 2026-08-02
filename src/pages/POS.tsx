@@ -254,7 +254,7 @@ export function POS() {
     );
   };
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
     setCartDiscount(0);
     setSaleNotes('');
@@ -262,7 +262,7 @@ export function POS() {
     setPaymentMethod('cash');
     setActiveHeldSaleId(null);
     focusBarcodeInput();
-  };
+  }, [focusBarcodeInput]);
 
   const handleInstantBillingSubmit = (values: InstantBillingFormValues) => {
     setCart((currentCart) => [
@@ -366,13 +366,12 @@ export function POS() {
       }
 
       setLastSaleId(sale.id);
-      openInvoicePrint(sale.id);
       clearCart();
-      await fetchData();
+      navigate(`/sales/${sale.id}?print=1`);
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }, [activeHeldSaleId, cart, cartDiscount, fetchData, openInvoicePrint, paymentMethod, saleNotes, selectedCustomerId]);
+  }, [activeHeldSaleId, cart, cartDiscount, clearCart, navigate, paymentMethod, saleNotes, selectedCustomerId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
