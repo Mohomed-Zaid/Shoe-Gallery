@@ -14,7 +14,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const menuItems = getNavItemsForRole(isBusinessAdminEmail(user?.email) ? 'admin' : profile?.role);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Preserve horizontal working space on the smaller monitors commonly used at tills.
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1180);
 
   const displayName = profile?.full_name || profile?.email?.split('@')[0] || 'User';
   const initial = displayName.charAt(0).toUpperCase();

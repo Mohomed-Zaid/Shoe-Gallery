@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
+  isOpen?: boolean;
   title: string;
   children: ReactNode;
   onClose: () => void;

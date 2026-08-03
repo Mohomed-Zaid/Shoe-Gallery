@@ -122,10 +122,9 @@ export function SaleDetail() {
                   Back
                 </Button>
               </Link>
-              <Button variant="secondary" onClick={() => setShowReturnModal(true)}>
-                <RotateCcw size={16} />
-                Return / Exchange
-              </Button>
+              <Link to={`/returns/new?invoice=${encodeURIComponent(sale.invoice_number || '')}`}>
+                <Button variant="secondary"><RotateCcw size={16} />Return / Exchange</Button>
+              </Link>
               <Button onClick={() => window.print()}>
                 <Printer size={16} />
                 Print

@@ -8,14 +8,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, action }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-dashboard-text-primary">{title}</h1>
+    <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
+      <div className="min-w-0">
+        <h1 className="text-xl font-bold text-dashboard-text-primary sm:text-2xl">{title}</h1>
         {description && (
           <p className="mt-1 text-sm text-dashboard-text-sub">{description}</p>
         )}
       </div>
-      {action}
+      {action && <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">{action}</div>}
     </div>
   );
 }

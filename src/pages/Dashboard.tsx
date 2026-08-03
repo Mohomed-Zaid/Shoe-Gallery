@@ -32,6 +32,7 @@ import { CategoryPieChart } from '../components/charts/CategoryPieChart';
 import { MonthlyRevenueChart } from '../components/charts/MonthlyRevenueChart';
 import { formatCurrency, formatDateTime } from '../utils/format';
 import { getSubscriptionStatus, SUBSCRIPTION_QUERY_KEY } from '../services/subscriptionService';
+import { RegisterStatusCard } from '../components/cash-register/RegisterStatusCard';
 
 const STORE_NAME = 'Shoe Gallery';
 
@@ -208,6 +209,8 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      <RegisterStatusCard />
 
       {cardsError && <Alert message="Unable to load dashboard data." />}
 

@@ -130,7 +130,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.total_amount), 0);
 
   const saleItemProfit = saleItems.reduce((sum, item) => {
-    const cost = Number(item.variant?.cost_price ?? 0) * item.quantity;
+    const cost = Number(item.is_instant_sale ? item.cost_price ?? 0 : item.variant?.cost_price ?? 0) * item.quantity;
     return sum + (Number(item.line_total ?? 0) - cost);
   }, 0);
 
@@ -243,13 +243,14 @@ export async function getReportsBundle(range: ReportRange, custom?: DateRange): 
 
   const salesAmount = sales.reduce((sum, sale) => sum + Number(sale.total_amount), 0);
   const profit = saleItems.reduce((sum, item) => {
-    const cost = Number(item.variant?.cost_price ?? 0) * item.quantity;
+    const cost = Number(item.is_instant_sale ? item.cost_price ?? 0 : item.variant?.cost_price ?? 0) * item.quantity;
     return sum + Number(item.line_total ?? 0) - cost;
   }, 0);
 
   const productSalesMap = saleItems.reduce<Record<string, { quantity: number; profit: number }>>((acc, item) => {
     const label = item.product_name_snapshot ?? item.variant?.product?.name ?? 'Unknown';
-    const profitAmount = Number(item.line_total ?? 0) - Number(item.variant?.cost_price ?? 0) * item.quantity;
+    const unitCost = Number(item.is_instant_sale ? item.cost_price ?? 0 : item.variant?.cost_price ?? 0);
+    const profitAmount = Number(item.line_total ?? 0) - unitCost * item.quantity;
     acc[label] = {
       quantity: (acc[label]?.quantity ?? 0) + item.quantity,
       profit: (acc[label]?.profit ?? 0) + profitAmount,

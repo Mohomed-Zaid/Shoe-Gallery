@@ -15,6 +15,7 @@ export interface CartItem {
   variant_id: string;
   quantity: number;
   unit_price: number;
+  cost_price?: number;
   discount_amount: number;
   product_name: string;
   size: string;
@@ -120,7 +121,7 @@ export async function createSale(payload: CreateSalePayload) {
   const paidAmount =
     payload.payment_method === 'credit'
       ? payload.paid_amount ?? 0
-      : payload.paid_amount ?? grandTotal;
+      : grandTotal;
   const balanceDue = Math.max(grandTotal - paidAmount, 0);
 
   const { data: authData } = await supabase.auth.getUser();
@@ -134,6 +135,7 @@ export async function createSale(payload: CreateSalePayload) {
       invoice_number: invoiceNumber,
       subtotal,
       discount_amount: discountAmount,
+      invoice_discount_amount: payload.discount_amount ?? 0,
       tax_amount: taxAmount,
       total_amount: grandTotal,
       paid_amount: paidAmount,
@@ -154,6 +156,10 @@ export async function createSale(payload: CreateSalePayload) {
     variant_id: item.is_instant_sale ? null : item.variant_id,
     quantity: item.quantity,
     selling_price: item.unit_price,
+    // Snapshot cost for every item. Never use the mutable variant cost in reports.
+    cost_price: item.cost_price == null ? null : Number(item.cost_price),
+    cost_price_at_sale: item.cost_price == null ? null : Number(item.cost_price),
+    line_subtotal: item.unit_price * item.quantity,
     discount_amount: item.discount_amount,
     line_total: item.unit_price * item.quantity - item.discount_amount,
     product_name_snapshot: item.is_instant_sale ? `${item.product_name} (Instant Sale)` : item.product_name,
@@ -166,6 +172,17 @@ export async function createSale(payload: CreateSalePayload) {
   const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
   if (saleItemsError) {
     throw saleItemsError;
+  }
+
+  if (paidAmount > 0) {
+    const { error: paymentError } = await supabase.from('sale_payments').insert({
+      sale_id: sale.id,
+      payment_method: payload.payment_method,
+      amount: paidAmount,
+      payment_date: new Date().toISOString(),
+      received_by: authData.user?.id ?? null,
+    });
+    if (paymentError) throw paymentError;
   }
 
   for (const item of payload.items) {
@@ -328,20 +345,7 @@ export async function createReturn(payload: CreateReturnPayload) {
     await adjustStock(item.variant_id, 'sale', item.quantity, `Exchange ${createdReturn.id}`);
   }
 
-  const { data: sale } = await supabase
-    .from('sales')
-    .select('total_amount')
-    .eq('id', payload.sale_id)
-    .maybeSingle();
-
-  if (sale) {
-    await supabase
-      .from('sales')
-      .update({
-        total_amount: Math.max(Number((sale as Pick<Sale, 'total_amount'>).total_amount) - payload.refund_amount, 0),
-      })
-      .eq('id', payload.sale_id);
-  }
+  // The original invoice is immutable; report net values through return records.
 
   if (payload.customer_id) {
     const { data: customer } = await supabase

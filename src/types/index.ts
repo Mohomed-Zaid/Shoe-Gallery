@@ -104,6 +104,7 @@ export interface SaleItem {
   variant_id: string | null;
   quantity: number;
   selling_price: number;
+  cost_price: number | null;
   discount_amount: number;
   line_total: number;
   product_name_snapshot: string | null;

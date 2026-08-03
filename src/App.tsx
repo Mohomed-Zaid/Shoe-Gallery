@@ -21,6 +21,12 @@ import { POS } from './pages/POS';
 import { Sales } from './pages/Sales';
 import { SaleDetail } from './pages/SaleDetail';
 import { Reports } from './pages/Reports';
+import { SalesReportPage } from './pages/SalesReportPage';
+import { SalesReturnsPage } from './pages/SalesReturnsPage';
+import { CreateSalesReturnPage } from './pages/CreateSalesReturnPage';
+import { SalesReturnDetailsPage } from './pages/SalesReturnDetailsPage';
+import { CashRegisterPage } from './pages/CashRegisterPage';
+import { CashRegisterGuard } from './components/cash-register/CashRegisterGuard';
 import { Settings } from './pages/Settings';
 import { SubscriptionGuard } from './components/auth/SubscriptionGuard';
 import { SubscriptionExpiredPage } from './pages/SubscriptionExpiredPage';
@@ -54,10 +60,15 @@ function App() {
                       <Route path="/inventory" element={<ProtectedRoute allowedRoles={['admin']}><Inventory /></ProtectedRoute>} />
                       <Route path="/customers" element={<Customers />} />
                       <Route path="/customers/:id" element={<CustomerDetail />} />
-                      <Route path="/pos" element={<POS />} />
+                      <Route path="/pos" element={<CashRegisterGuard><POS /></CashRegisterGuard>} />
+                      <Route path="/cash-register" element={<CashRegisterPage />} />
                       <Route path="/sales" element={<Sales />} />
                       <Route path="/sales/:id" element={<SaleDetail />} />
+                      <Route path="/returns" element={<SalesReturnsPage />} />
+                      <Route path="/returns/new" element={<CreateSalesReturnPage />} />
+                      <Route path="/returns/:id" element={<SalesReturnDetailsPage />} />
                       <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin']}><Reports /></ProtectedRoute>} />
+                      <Route path="/reports/sales" element={<SalesReportPage />} />
                       <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><Settings /></ProtectedRoute>} />
                       <Route path="/admin/subscription" element={<SubscriptionManagementPage />} />
                       <Route path="*" element={<Navigate to="/" replace />} />

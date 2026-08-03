@@ -9,7 +9,9 @@ import {
   Boxes,
   Users,
   CreditCard,
+  CircleDollarSign,
   ReceiptText,
+  RotateCcw,
   BarChart3,
   Settings,
   type LucideIcon,
@@ -34,8 +36,10 @@ export const navItems: NavItem[] = [
   { path: '/barcode-printing', label: 'Barcode Printing', icon: ScanLine, roles: ['admin', 'cashier'] },
   { path: '/customers', label: 'Customers', icon: Users, roles: ['admin', 'cashier'] },
   { path: '/pos', label: 'POS', icon: CreditCard, roles: ['admin', 'cashier'] },
+  { path: '/cash-register', label: 'Cash Register', icon: CircleDollarSign, roles: ['admin', 'cashier'] },
   { path: '/sales', label: 'Sales', icon: ReceiptText, roles: ['admin', 'cashier'] },
-  { path: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin'] },
+  { path: '/returns', label: 'Sales Returns', icon: RotateCcw, roles: ['admin', 'cashier'] },
+  { path: '/reports/sales', label: 'Sales Report', icon: BarChart3, roles: ['admin'] },
   { path: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
 ];
 
@@ -52,5 +56,8 @@ export function getPageTitle(pathname: string): string {
   if (pathname === '/barcode-printing') return 'Barcode Printing';
   if (pathname.startsWith('/customers/')) return 'Customer Details';
   if (pathname.startsWith('/sales/')) return 'Sale Details';
+  if (pathname === '/cash-register') return 'Cash Register';
+  if (pathname === '/returns/new') return 'New Sales Return';
+  if (pathname.startsWith('/returns/')) return 'Return Details';
   return 'Dashboard';
 }

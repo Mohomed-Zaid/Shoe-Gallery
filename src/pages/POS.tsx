@@ -39,6 +39,7 @@ interface CustomerFormValues {
 
 interface InstantBillingFormValues {
   product_name: string;
+  cost_price: number;
   selling_price: number;
   quantity: number;
   discount: number;
@@ -83,7 +84,7 @@ export function POS() {
   const [showInstantBillingModal, setShowInstantBillingModal] = useState(false);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CustomerFormValues>();
   const instantBillingForm = useForm<InstantBillingFormValues>({
-    defaultValues: { quantity: 1, discount: 0 }
+    defaultValues: { cost_price: 0, quantity: 1, discount: 0 }
   });
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -186,6 +187,7 @@ export function POS() {
           variant_id: variant.id,
           quantity: 1,
           unit_price: Number(variant.selling_price),
+          cost_price: Number(variant.cost_price),
           discount_amount: 0,
           product_name: variant.product.name,
           size: variant.size,
@@ -274,6 +276,7 @@ export function POS() {
       {
         variant_id: `instant-${Date.now()}`,
         quantity: Number(values.quantity),
+        cost_price: Number(values.cost_price),
         unit_price: Number(values.selling_price),
         discount_amount: Number(values.discount || 0),
         product_name: values.product_name,
@@ -780,8 +783,9 @@ export function POS() {
         <Modal title="Instant Billing" onClose={() => setShowInstantBillingModal(false)}>
           <form onSubmit={instantBillingForm.handleSubmit(handleInstantBillingSubmit)} className="space-y-4">
             <Input label="Product Name" error={instantBillingForm.formState.errors.product_name?.message} {...instantBillingForm.register('product_name', { required: 'Product Name is required' })} />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input type="number" step="0.01" label="Selling Price" error={instantBillingForm.formState.errors.selling_price?.message} {...instantBillingForm.register('selling_price', { required: 'Price is required', min: 0 })} />
+            <div className="grid gap-4 md:grid-cols-3">
+              <Input type="number" step="0.01" label="Cost Price" error={instantBillingForm.formState.errors.cost_price?.message} {...instantBillingForm.register('cost_price', { required: 'Cost is required', min: { value: 0, message: 'Cost cannot be negative' }, valueAsNumber: true })} />
+              <Input type="number" step="0.01" label="Selling Price" error={instantBillingForm.formState.errors.selling_price?.message} {...instantBillingForm.register('selling_price', { required: 'Price is required', min: { value: 0, message: 'Price cannot be negative' }, valueAsNumber: true })} />
               <Input type="number" label="Quantity" error={instantBillingForm.formState.errors.quantity?.message} {...instantBillingForm.register('quantity', { required: 'Quantity is required', min: 1 })} />
             </div>
             <Input type="number" step="0.01" label="Discount" error={instantBillingForm.formState.errors.discount?.message} {...instantBillingForm.register('discount', { min: 0 })} />

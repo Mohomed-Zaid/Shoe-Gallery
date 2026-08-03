@@ -114,6 +114,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
         sale_id,
         quantity,
         selling_price,
+        cost_price,
         is_instant_sale,
         variant:product_variants(cost_price)
       `),
@@ -127,6 +128,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
     sale_id: string;
     quantity: number;
     selling_price: number;
+    cost_price: number | null;
     is_instant_sale: boolean | null;
     variant: { cost_price: number } | null;
   };
@@ -135,7 +137,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
   const monthSaleIds = new Set((monthlySalesRes.data ?? []).map((sale) => sale.id));
   const todaySaleItemsData = allSaleItemsData.filter((item) => todaySaleIds.has(item.sale_id));
   const todayProfit = todaySaleItemsData.reduce((s, item) => {
-    if (item.is_instant_sale) return s + Number(item.selling_price) * item.quantity;
+    if (item.is_instant_sale) return s + (Number(item.selling_price) - Number(item.cost_price ?? 0)) * item.quantity;
     const cost = Number(item.variant?.cost_price ?? 0);
     return s + (Number(item.selling_price) - cost) * item.quantity;
   }, 0);
@@ -143,7 +145,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
   // Monthly profit — fetch separately for the month
   const monthSaleItemsData = allSaleItemsData.filter((item) => monthSaleIds.has(item.sale_id));
   const monthlyProfit = monthSaleItemsData.reduce((s, item) => {
-    if (item.is_instant_sale) return s + Number(item.selling_price) * item.quantity;
+    if (item.is_instant_sale) return s + (Number(item.selling_price) - Number(item.cost_price ?? 0)) * item.quantity;
     const cost = Number(item.variant?.cost_price ?? 0);
     return s + (Number(item.selling_price) - cost) * item.quantity;
   }, 0);
@@ -256,10 +258,10 @@ export async function getRevenueProfitTrend(): Promise<RevenueProfitPoint[]> {
 
   const { data: itemsData } = await supabase
     .from('sale_items')
-    .select('sale_id, quantity, selling_price, is_instant_sale, variant:product_variants(cost_price)')
+    .select('sale_id, quantity, selling_price, cost_price, is_instant_sale, variant:product_variants(cost_price)')
     .in('sale_id', sales.map((sale) => sale.id));
 
-  type ItemRow = { sale_id: string; quantity: number; selling_price: number; is_instant_sale: boolean | null; variant: { cost_price: number } | null };
+  type ItemRow = { sale_id: string; quantity: number; selling_price: number; cost_price: number | null; is_instant_sale: boolean | null; variant: { cost_price: number } | null };
   const items = (itemsData ?? []) as unknown as ItemRow[];
 
   // Map sale_id -> profit
@@ -267,7 +269,7 @@ export async function getRevenueProfitTrend(): Promise<RevenueProfitPoint[]> {
   for (const item of items) {
     const prev = saleProfit.get(item.sale_id) ?? 0;
     const profit = item.is_instant_sale
-      ? Number(item.selling_price) * item.quantity
+      ? (Number(item.selling_price) - Number(item.cost_price ?? 0)) * item.quantity
       : (Number(item.selling_price) - Number(item.variant?.cost_price ?? 0)) * item.quantity;
     saleProfit.set(item.sale_id, prev + profit);
   }
