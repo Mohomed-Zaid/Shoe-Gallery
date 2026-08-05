@@ -54,6 +54,12 @@ export interface HeldSalePayload {
   cart_data: CartItem[];
 }
 
+export const CARD_PAYMENT_FEE_RATE = 0.0275;
+
+export function calculateCardPaymentFee(amount: number) {
+  return Math.round(amount * CARD_PAYMENT_FEE_RATE * 100) / 100;
+}
+
 function buildInvoiceNumber(prefix: string) {
   const now = new Date();
   const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -113,7 +119,9 @@ export async function createSale(payload: CreateSalePayload) {
   const subtotal = payload.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const itemDiscount = payload.items.reduce((sum, item) => sum + item.discount_amount, 0);
   const discountAmount = (payload.discount_amount ?? 0) + itemDiscount;
-  const taxAmount = payload.tax_amount ?? 0;
+  const amountAfterDiscount = subtotal - discountAmount;
+  const cardPaymentFee = payload.payment_method === 'card' ? calculateCardPaymentFee(amountAfterDiscount) : 0;
+  const taxAmount = (payload.tax_amount ?? 0) + cardPaymentFee;
   const grandTotal = subtotal - discountAmount + taxAmount;
   if (discountAmount < 0 || grandTotal < 0) {
     throw new Error('Discount cannot exceed the sale amount.');

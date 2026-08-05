@@ -147,7 +147,9 @@ export function POS() {
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const lineDiscountTotal = cart.reduce((sum, item) => sum + item.discount_amount, 0);
   const maximumCartDiscount = Math.max(subtotal - lineDiscountTotal, 0);
-  const grandTotal = subtotal - lineDiscountTotal - cartDiscount;
+  const totalAfterDiscount = subtotal - lineDiscountTotal - cartDiscount;
+  const cardPaymentFee = paymentMethod === 'card' ? salesService.calculateCardPaymentFee(totalAfterDiscount) : 0;
+  const grandTotal = totalAfterDiscount + cardPaymentFee;
   const changeDue = paymentMethod === 'cash' ? Math.max(amountReceived - grandTotal, 0) : 0;
 
   const playScanSuccessSound = () => {
@@ -678,6 +680,12 @@ export function POS() {
                   <span>Discount</span>
                   <span>{formatCurrency(lineDiscountTotal + cartDiscount)}</span>
                 </div>
+                {paymentMethod === 'card' && (
+                  <div className="flex items-center justify-between text-dashboard-text-sub">
+                    <span>Card Fee (2.75%)</span>
+                    <span>{formatCurrency(cardPaymentFee)}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between border-t border-white/10 pt-3 text-base font-semibold text-dashboard-text-primary">
                   <span>Grand Total</span>
                   <span>{formatCurrency(grandTotal)}</span>

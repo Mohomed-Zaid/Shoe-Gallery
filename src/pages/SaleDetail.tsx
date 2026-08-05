@@ -199,7 +199,7 @@ export function SaleDetail() {
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Subtotal</span><span>{formatCurrency(Number(sale.subtotal))}</span></div>
                 <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Discount</span><span>{formatCurrency(Number(sale.discount_amount))}</span></div>
-                <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Tax</span><span>{formatCurrency(Number(sale.tax_amount))}</span></div>
+                <div className="flex justify-between text-slate-600 print:text-slate-600"><span>{sale.payment_method === 'card' ? 'Card Fee (2.75%)' : 'Tax'}</span><span>{formatCurrency(Number(sale.tax_amount))}</span></div>
                 <div className="flex justify-between font-semibold text-black print:text-black"><span>Grand Total</span><span>{formatCurrency(Number(sale.total_amount))}</span></div>
               <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Paid</span><span>{formatCurrency(Number(sale.paid_amount))}</span></div>
               <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Change Due</span><span>{formatCurrency(changeDue)}</span></div>
@@ -271,7 +271,7 @@ export function SaleDetail() {
                 <span>{formatCurrency(Number(sale.discount_amount))}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Tax</span>
+                <span>{sale.payment_method === 'card' ? 'Card Fee (2.75%)' : 'Tax'}</span>
                 <span>{formatCurrency(Number(sale.tax_amount))}</span>
               </div>
               <div className="flex items-center justify-between text-sm font-bold text-black">
