@@ -92,7 +92,7 @@ export function ProductDetail() {
 
     const result = editingVariantId
       ? await productService.updateVariant(editingVariantId, payload)
-      : await productService.createVariant(payload);
+      : await productService.createVariant({ ...payload, barcode_number: null });
 
     if (result.error) {
       setError(getErrorMessage(result.error));
