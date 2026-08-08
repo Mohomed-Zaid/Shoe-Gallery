@@ -28,6 +28,7 @@ export interface CartItem {
 export interface SaleWithRelations extends Sale {
   customer: Customer | null;
   cashier: Profile | null;
+  sale_payments: Array<{id:string;payment_method:string;amount:number}>;
   sale_items: Array<
     SaleItem & {
       variant: (ProductVariant & { product: Product | null }) | null;
@@ -81,6 +82,7 @@ export async function getSales() {
       *,
       customer:customers(*),
       cashier:profiles(*),
+      sale_payments(id,payment_method,amount),
       sale_items(
         *,
         variant:product_variants(
@@ -100,6 +102,7 @@ export async function getSaleById(id: string) {
       *,
       customer:customers(*),
       cashier:profiles(*),
+      sale_payments(id,payment_method,amount),
       sale_items(
         *,
         variant:product_variants(

@@ -1,0 +1,19 @@
+.screen-receipt-preview{width:min(100%,76mm);margin:0 auto;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.thermal-receipt{width:76mm;box-sizing:border-box;margin:0;padding:3mm;background:#fff;color:#000;font-family:"Courier New",Courier,monospace;font-size:11px;line-height:1.3;overflow-wrap:anywhere}
+.thermal-receipt--58{width:54mm}
+.thermal-receipt--80{width:76mm}
+.thermal-receipt *{box-sizing:border-box;color:#000}
+.receipt-header{text-align:center;padding-bottom:2mm}
+.receipt-header h1{margin:0;font-size:16px;line-height:1.2}
+.receipt-header p,.receipt-footer p{margin:1mm 0}
+.receipt-section{border-top:1px dashed #000;padding-top:2mm;margin-top:2mm}
+.receipt-row{display:flex;justify-content:space-between;align-items:baseline;gap:2mm;margin:.6mm 0}
+.receipt-row>:first-child{min-width:0}
+.receipt-row>:last-child{text-align:right}
+.receipt-item{padding:1.5mm 0;break-inside:avoid}
+.receipt-item-name{display:block;white-space:normal;overflow-wrap:anywhere}
+.receipt-muted{font-size:10px}
+.receipt-grand-total{border-block:1px dashed #000;margin:2mm 0;padding:1mm 0;font-size:15px;font-weight:700}
+.receipt-totals,.receipt-payments{break-inside:avoid}
+.receipt-footer{text-align:center}
+.receipt-footer strong{font-size:14px}
