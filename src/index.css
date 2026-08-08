@@ -5,9 +5,22 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
   body {
     @apply font-sans antialiased;
   }
+
+  button, input, select, textarea { max-width: 100%; }
+  button, [role="button"] { touch-action: manipulation; }
+  img, svg, canvas { max-width: 100%; }
 }
 
 /* Dedicated Sales Report PDF layout. Kept after the legacy print rules so the
@@ -116,6 +129,10 @@
     gap: 1rem;
   }
 
+  .dashboard-page main > .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important;
+  }
+
   .sales-report-page .glass-card,
   main:has(a[href="/returns/new"]) .glass-card {
     font-size: .88rem;
@@ -144,6 +161,29 @@
     padding-left: .75rem !important;
     padding-right: .75rem !important;
   }
+
+  .glass-card { border-radius: .75rem; }
+}
+
+/* POS switches to focused Products/Cart tabs before the two-column workspace
+   becomes too narrow. The active pane remains the only scrolling surface. */
+.pos-mobile-tabs { display: none; }
+.pos-mobile-checkout { display: none; }
+@media screen and (max-width: 899px) {
+  .pos-mobile-tabs { display: grid; position: sticky; top: .5rem; z-index: 20; }
+  .pos-workspace { display: block !important; }
+  .pos-products-pane,
+  .pos-cart-pane { display: none; }
+  .pos-products-pane.pos-pane-active,
+  .pos-cart-pane.pos-pane-active { display: block; }
+  .pos-cart-pane { position: static !important; }
+  .pos-mobile-checkout { display: block; }
+  .pos-workspace { padding-bottom: 5rem; }
+}
+
+@media screen and (max-height: 760px) and (min-width: 900px) {
+  .pos-workspace { gap: .75rem !important; }
+  .pos-cart-pane { top: .5rem !important; max-height: calc(100dvh - 5rem); overflow-y: auto; }
 }
 
 @layer components {
@@ -157,6 +197,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    max-width: 100%;
   }
 
   .glass-card::before {
@@ -290,7 +331,9 @@
   }
 
   .dashboard-table {
-    overflow: hidden;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
     border-radius: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background-color: rgba(255, 255, 255, 0.05);
@@ -298,6 +341,8 @@
     -webkit-backdrop-filter: blur(20px);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
+
+  .dashboard-table table { max-width: none; }
 
   /* ── Nav active pill ── */
   .nav-active {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CreditCard, Minus, Package2, Plus, Printer, Search, Trash2, Zap } from 'lucide-react';
+import { ChevronDown, CreditCard, LayoutGrid, Minus, Package2, Plus, Printer, ScanLine, Search, Trash2, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import type { Category, Customer, Product, ProductVariant } from '../types';
@@ -8,6 +8,7 @@ import * as categoryService from '../services/categoryService';
 import * as customerService from '../services/customerService';
 import * as productService from '../services/productService';
 import * as salesService from '../services/salesService';
+import * as settingsService from '../services/settingsService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
 import {
@@ -20,6 +21,9 @@ import {
   Select,
   Textarea,
 } from '../components/ui';
+import { POSItemNumberInput } from '../components/pos/POSItemNumberInput';
+import { ProductVariantSelector } from '../components/pos/ProductVariantSelector';
+import type { POSProduct } from '../services/productService';
 
 interface ProductWithCategory extends Product {
   category: Category | null;
@@ -67,9 +71,15 @@ export function POS() {
   const [heldSales, setHeldSales] = useState<HeldSaleWithCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [showProductBrowser, setShowProductBrowser] = useState(false);
+  const [mobilePosTab, setMobilePosTab] = useState<'products' | 'cart'>('products');
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null);
+  const [itemNumberProduct, setItemNumberProduct] = useState<POSProduct | null>(null);
+  const [keepVariantGridOpen, setKeepVariantGridOpen] = useState(() => localStorage.getItem('pos-keep-variant-grid-open') === 'true');
+  const [lowStockLimit, setLowStockLimit] = useState(10);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDiscount, setCartDiscount] = useState(0);
   const [amountReceived, setAmountReceived] = useState(0);
@@ -87,16 +97,19 @@ export function POS() {
     defaultValues: { cost_price: 0, quantity: 1, discount: 0 }
   });
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const itemNumberInputRef = useRef<HTMLInputElement>(null);
+  const cartRef = useRef<HTMLDivElement>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [productsResult, variantsResult, categoriesResult, customersResult, heldSalesResult] = await Promise.all([
+    const [productsResult, variantsResult, categoriesResult, customersResult, heldSalesResult, settingsResult] = await Promise.all([
       productService.getProductsWithRelations(),
       productService.getAllProductVariants(),
       categoryService.getCategories(),
       customerService.getCustomers({ page: 1, pageSize: 100 }),
       salesService.getHeldSales(),
+      settingsService.getStoreSettings(),
     ]);
 
     if (productsResult.error || variantsResult.error || categoriesResult.error || customersResult.error || heldSalesResult.error) {
@@ -107,6 +120,7 @@ export function POS() {
       setCategories((categoriesResult.data as Category[]) ?? []);
       setCustomers((customersResult.data as Customer[]) ?? []);
       setHeldSales((heldSalesResult.data as HeldSaleWithCustomer[]) ?? []);
+      setLowStockLimit(Number(settingsResult.data?.default_low_stock_limit ?? 10));
     }
     setLoading(false);
   }, []);
@@ -119,6 +133,10 @@ export function POS() {
     window.setTimeout(() => {
       barcodeInputRef.current?.focus();
     }, 50);
+  }, []);
+
+  const focusItemNumberInput = useCallback(() => {
+    window.setTimeout(() => itemNumberInputRef.current?.focus(), 50);
   }, []);
 
   useEffect(() => {
@@ -172,13 +190,19 @@ export function POS() {
     }
   };
 
-  const addVariantToCart = (variant: VariantWithProduct) => {
+  const addVariantToCart = useCallback((variant: VariantWithProduct, quantity = 1, returnFocus: 'barcode' | 'item-number' = 'barcode') => {
+    const requested = Math.max(1, Math.floor(quantity));
+    const currentQuantity = cart.find((item) => item.variant_id === variant.id)?.quantity ?? 0;
+    if (currentQuantity + requested > variant.stock_quantity) {
+      setError(`Only ${variant.stock_quantity} items are available.`);
+      return false;
+    }
     setCart((currentCart) => {
       const existingItem = currentCart.find((item) => item.variant_id === variant.id);
       if (existingItem) {
         return currentCart.map((item) =>
           item.variant_id === variant.id
-            ? { ...item, quantity: Math.min(item.quantity + 1, variant.stock_quantity) }
+            ? { ...item, quantity: item.quantity + requested }
             : item
         );
       }
@@ -187,18 +211,30 @@ export function POS() {
         ...currentCart,
         {
           variant_id: variant.id,
-          quantity: 1,
+          quantity: requested,
           unit_price: Number(variant.selling_price),
           cost_price: Number(variant.cost_price),
           discount_amount: 0,
           product_name: variant.product.name,
+          item_number: variant.product.item_number || variant.product.code,
+          barcode_number: variant.barcode_number,
           size: variant.size,
           color: variant.color,
         },
       ];
     });
     setSelectedProduct(null);
-    focusBarcodeInput();
+    setError(null);
+    setSuccess(`${variant.product.name} · ${variant.size} / ${variant.color} added to the invoice.`);
+    window.setTimeout(() => setSuccess(null), 2500);
+    if (returnFocus === 'item-number') focusItemNumberInput(); else focusBarcodeInput();
+    return true;
+  }, [cart, focusBarcodeInput, focusItemNumberInput]);
+
+  const addItemNumberVariant = (variant: ProductVariant, quantity: number) => {
+    if (!itemNumberProduct) return false;
+    const enriched = { ...variant, product: itemNumberProduct } as VariantWithProduct;
+    return addVariantToCart(enriched, quantity, 'item-number');
   };
 
   const handleBarcodeScan = useCallback(async (barcode: string) => {
@@ -230,7 +266,7 @@ export function POS() {
     addVariantToCart(matchedVariant);
     playScanSuccessSound();
     setBarcodeInput('');
-  }, [focusBarcodeInput, variants]);
+  }, [addVariantToCart, focusBarcodeInput, variants]);
 
   const updateCartQuantity = (variantId: string, quantity: number) => {
     if (quantity <= 0) {
@@ -402,12 +438,18 @@ export function POS() {
 
       if (event.key === 'Escape') {
         setSelectedProduct(null);
+        setItemNumberProduct(null);
+      }
+
+      if (event.key === 'F2') {
+        event.preventDefault();
+        focusItemNumberInput();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCompleteSale]);
+  }, [focusItemNumberInput, handleCompleteSale]);
 
   const handlePrintInvoice = () => {
     if (!lastSaleId) return;
@@ -439,22 +481,13 @@ export function POS() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Point Of Sale"
-        description="Fast checkout with customer selection, held sales, and inventory sync."
+        title="Point of Sale"
+        description="Scan, select, and complete the sale."
         action={
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={handleHoldSale}>
-              Hold Sale
-            </Button>
-            <Button variant="secondary" onClick={() => setShowHeldSalesModal(true)}>
-              Resume Held Sale
-            </Button>
             <Button variant="secondary" onClick={() => setShowInstantBillingModal(true)}>
               <Zap size={16} />
               Instant Billing
-            </Button>
-            <Button variant="outline" onClick={clearCart}>
-              Clear Cart
             </Button>
             <Button variant="secondary" onClick={handlePrintInvoice} disabled={!lastSaleId}>
               <Printer size={16} />
@@ -465,13 +498,24 @@ export function POS() {
       />
 
       {error && <Alert message={error} />}
+      {success && <div role="status" className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{success}</div>}
 
-      <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <div className="space-y-6">
-          <div className="glass-card p-5">
-            <div className="relative z-10 grid gap-4 md:grid-cols-[1fr_220px]">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-dashboard-text-label">Barcode Scanner</label>
+      <div className="pos-mobile-tabs grid grid-cols-2 rounded-xl border border-white/10 bg-white/[.04] p-1">
+        <button type="button" onClick={() => setMobilePosTab('products')} className={`rounded-lg px-3 py-2.5 text-sm font-medium ${mobilePosTab === 'products' ? 'bg-emerald-500 text-white' : 'text-dashboard-text-label'}`}>Products</button>
+        <button type="button" onClick={() => setMobilePosTab('cart')} className={`rounded-lg px-3 py-2.5 text-sm font-medium ${mobilePosTab === 'cart' ? 'bg-emerald-500 text-white' : 'text-dashboard-text-label'}`}>Cart ({cart.reduce((sum,item)=>sum+item.quantity,0)})</button>
+      </div>
+
+      <div className="pos-workspace grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.72fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
+        <div className={`pos-products-pane min-w-0 space-y-4 ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
+          <section className="glass-card overflow-visible p-5">
+            <div className="relative z-10">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-sky-300">Fast add</p><h2 className="mt-1 font-semibold text-dashboard-text-primary">Add an item to the invoice</h2></div>
+                <span className="hidden rounded-full bg-white/[.06] px-3 py-1 text-xs text-dashboard-text-sub sm:block">Barcode · Item number · Manual search</span>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between text-sm font-medium text-dashboard-text-label"><span>Scan Barcode</span><ScanLine size={16}/></label>
                 <div className="relative">
                   <Input
                     ref={barcodeInputRef}
@@ -483,36 +527,26 @@ export function POS() {
                         void handleBarcodeScan(barcodeInput);
                       }
                     }}
-                    placeholder="Scan barcode or type and press Enter"
+                    placeholder="Scan or enter barcode"
                     className="pl-10"
                   />
-                  <Search className="pointer-events-none absolute left-3 top-[calc(50%+2px)] -translate-y-1/2 text-dashboard-text-sub" size={16} />
+                  <ScanLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16} />
                 </div>
-                <p className="text-xs text-dashboard-text-sub">The scanner input stays active so checkout remains fast.</p>
               </div>
-              <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                <option value="">All Categories</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </Select>
+              <POSItemNumberInput inputRef={itemNumberInputRef} onSelect={(product) => setItemNumberProduct(product)} onError={setError}/>
             </div>
-            <div className="mt-4">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16} />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search products by code or name"
-                  className="pl-10"
-                />
-              </div>
+              <button type="button" onClick={() => setShowProductBrowser((open) => !open)} className="mt-4 flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.035] px-4 py-3 text-sm text-dashboard-text-label transition hover:bg-white/[.07] hover:text-dashboard-text-primary">
+                <span className="flex items-center gap-2"><LayoutGrid size={16}/>Search products manually</span><ChevronDown size={16} className={`transition ${showProductBrowser ? 'rotate-180' : ''}`}/>
+              </button>
             </div>
-          </div>
+          </section>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {showProductBrowser && <section className="space-y-4">
+            <div className="glass-card grid gap-3 p-4 sm:grid-cols-[1fr_220px]">
+              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name, item number, or code" className="pl-10"/></div>
+              <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {filteredProducts.map((product) => {
               const productVariants = variantsByProduct[product.id] ?? [];
               const totalStock = productVariants.reduce((sum, item) => sum + item.stock_quantity, 0);
@@ -523,16 +557,16 @@ export function POS() {
                   key={product.id}
                   type="button"
                   onClick={() => setSelectedProduct(product)}
-                  className="glass-card-hover p-5 text-left"
+                  className="glass-card-hover p-4 text-left"
                 >
                   <div className="relative z-10 flex items-start gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-dashboard-accent/20 text-dashboard-text-primary">
-                      <Package2 size={22} />
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-dashboard-accent/15 text-dashboard-text-primary">
+                      <Package2 size={19} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-dashboard-text-primary">{product.name}</p>
-                      <p className="mt-1 text-xs text-dashboard-text-sub">{product.code} • {product.category?.name || 'Uncategorized'}</p>
-                      <div className="mt-3 flex items-center justify-between text-sm">
+                      <p className="mt-1 truncate text-xs text-dashboard-text-sub">{product.item_number || product.code} · {product.category?.name || 'Uncategorized'}</p>
+                      <div className="mt-2 flex items-center justify-between text-sm">
                         <span className="font-medium text-dashboard-text-primary">{Number.isFinite(startPrice) ? formatCurrency(startPrice) : '-'}</span>
                         <span className={`rounded-full px-2 py-1 text-xs ${totalStock > 0 ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
                           {totalStock} in stock
@@ -543,19 +577,23 @@ export function POS() {
                 </button>
               );
             })}
-          </div>
+            </div>
 
           {filteredProducts.length === 0 && (
-            <div className="glass-card p-10 text-center text-dashboard-text-sub">
+            <div className="glass-card p-8 text-center text-dashboard-text-sub">
               No products match the current filters.
             </div>
           )}
+          </section>}
         </div>
 
-        <div className="glass-card p-5">
+        <div ref={cartRef} className={`pos-cart-pane glass-card min-w-0 self-start p-4 sm:p-5 lg:sticky lg:top-4 ${mobilePosTab === 'cart' ? 'pos-pane-active' : ''}`}>
           <div className="relative z-10 space-y-5">
             <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-dashboard-text-primary">Shopping Cart</h3>
+              <div className="flex items-center justify-between gap-3">
+                <div><p className="text-xs uppercase tracking-wider text-dashboard-text-sub">Current invoice</p><h3 className="text-lg font-semibold text-dashboard-text-primary">Cart <span className="text-sm font-normal text-dashboard-text-sub">({cart.reduce((sum, item) => sum + item.quantity, 0)})</span></h3></div>
+                <button type="button" onClick={clearCart} disabled={!cart.length} className="text-xs text-red-300 transition hover:text-red-200 disabled:opacity-40">Clear</button>
+              </div>
               <Select value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)}>
                 <option value="walk-in">Walk-in Customer</option>
                 {customers.map((customer) => (
@@ -577,6 +615,10 @@ export function POS() {
                 >
                   View Profile
                 </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" variant="outline" onClick={handleHoldSale} disabled={!cart.length}>Hold sale</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowHeldSalesModal(true)}>Held sales {heldSales.length ? `(${heldSales.length})` : ''}</Button>
               </div>
             </div>
 
@@ -713,6 +755,10 @@ export function POS() {
         </div>
       </div>
 
+      {mobilePosTab === 'cart' && <div className="pos-mobile-checkout fixed inset-x-0 bottom-0 z-30 border-t border-white/15 bg-[#061711]/95 p-3 shadow-2xl backdrop-blur">
+        <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="text-xs text-dashboard-text-sub">Grand Total</p><p className="truncate text-lg font-bold text-dashboard-text-primary">{formatCurrency(grandTotal)}</p></div><Button className="min-h-12 flex-1" onClick={() => void handleCompleteSale()} disabled={!cart.length}><CreditCard size={17}/>Complete Sale</Button></div>
+      </div>}
+
       {selectedProduct && (
         <Modal title={`Select Variant - ${selectedProduct.name}`} onClose={() => setSelectedProduct(null)} size="lg">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -731,6 +777,19 @@ export function POS() {
             ))}
           </div>
         </Modal>
+      )}
+
+      {itemNumberProduct && (
+        <ProductVariantSelector
+          product={itemNumberProduct}
+          cartQuantities={cart.reduce<Record<string, number>>((result, item) => { result[item.variant_id] = item.quantity; return result; }, {})}
+          lowStockLimit={lowStockLimit}
+          keepOpen={keepVariantGridOpen}
+          onKeepOpenChange={(value) => { setKeepVariantGridOpen(value); localStorage.setItem('pos-keep-variant-grid-open', String(value)); }}
+          onAdd={addItemNumberVariant}
+          onClose={() => { setItemNumberProduct(null); focusItemNumberInput(); }}
+          onViewCart={() => { setItemNumberProduct(null); cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        />
       )}
 
       {showCustomerModal && (

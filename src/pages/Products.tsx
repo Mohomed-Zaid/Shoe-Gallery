@@ -21,7 +21,7 @@ import {
 } from '../components/ui';
 
 interface ProductFormInputs {
-  code: string;
+  item_number: string;
   name: string;
   category_id: string;
   brand_id: string;
@@ -72,7 +72,9 @@ export function Products() {
 
     try {
       const payload = {
-        code: data.code,
+        code: data.item_number,
+        item_number: data.item_number,
+        is_active: true,
         name: data.name,
         category_id: data.category_id || null,
         brand_id: data.brand_id || null,
@@ -98,7 +100,7 @@ export function Products() {
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     reset({
-      code: product.code,
+      item_number: product.item_number || product.code,
       name: product.name,
       category_id: product.category_id || '',
       brand_id: product.brand_id || '',
@@ -150,7 +152,7 @@ export function Products() {
           {products.map((product) => (
             <tr key={product.id} className="hover:bg-dashboard-hover">
               <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-dashboard-text-primary">
-                {product.code}
+                {product.item_number || product.code}
               </td>
               <td className="whitespace-nowrap px-6 py-4">
                 <div>
@@ -184,7 +186,7 @@ export function Products() {
       {showModal && (
         <Modal title={editingId ? 'Edit Product' : 'Add Product'} onClose={closeModal} size="lg">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <Input id="code" label="Product Code" error={errors.code?.message} {...register('code', { required: 'Product code is required' })} />
+            <Input id="item_number" label="Item Number" placeholder="e.g. SH-001 or 1001" error={errors.item_number?.message} {...register('item_number', { required: 'Item number is required', pattern: { value: /^[A-Za-z0-9-]+$/, message: 'Use only letters, numbers, and hyphens' } })} />
             <Input id="name" label="Name" error={errors.name?.message} {...register('name', { required: 'Name is required' })} />
             <Select id="category_id" label="Category" {...register('category_id')}>
               <option value="">Select a category</option>

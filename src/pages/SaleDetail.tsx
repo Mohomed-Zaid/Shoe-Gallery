@@ -103,7 +103,8 @@ export function SaleDetail() {
   const invoiceTitle = settings?.store_name || 'Shoe Gallery';
   const receiptFooter = settings?.receipt_footer || 'Thank you for shopping with us.';
   const customerName = sale?.customer?.name || 'Walk-in Customer';
-  const changeDue = Math.max(Number(sale?.paid_amount ?? 0) - Number(sale?.total_amount ?? 0), 0);
+  const amountTendered = Number(sale?.amount_tendered ?? sale?.paid_amount ?? 0);
+  const changeDue = Number(sale?.change_due ?? Math.max(amountTendered - Number(sale?.total_amount ?? 0), 0));
 
   if (loading) return <LoadingSpinner />;
   if (!sale) return <Alert message={error ?? 'Sale not found.'} />;
@@ -201,7 +202,7 @@ export function SaleDetail() {
                 <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Discount</span><span>{formatCurrency(Number(sale.discount_amount))}</span></div>
                 <div className="flex justify-between text-slate-600 print:text-slate-600"><span>{sale.payment_method === 'card' ? 'Card Fee (2.75%)' : 'Tax'}</span><span>{formatCurrency(Number(sale.tax_amount))}</span></div>
                 <div className="flex justify-between font-semibold text-black print:text-black"><span>Grand Total</span><span>{formatCurrency(Number(sale.total_amount))}</span></div>
-              <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Paid</span><span>{formatCurrency(Number(sale.paid_amount))}</span></div>
+              <div className="flex justify-between text-slate-600 print:text-slate-600"><span>{sale.payment_method === 'cash' ? 'Cash Received' : 'Paid'}</span><span>{formatCurrency(amountTendered)}</span></div>
               <div className="flex justify-between text-slate-600 print:text-slate-600"><span>Change Due</span><span>{formatCurrency(changeDue)}</span></div>
               </div>
             </div>
@@ -279,8 +280,8 @@ export function SaleDetail() {
                 <span>{formatCurrency(Number(sale.total_amount))}</span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
-                <span>Paid</span>
-                <span>{formatCurrency(Number(sale.paid_amount))}</span>
+                <span>{sale.payment_method === 'cash' ? 'Cash Received' : 'Paid'}</span>
+                <span>{formatCurrency(amountTendered)}</span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
                 <span>Change</span>
@@ -313,7 +314,12 @@ export function SaleDetail() {
               <option value="store_credit">Store Credit</option>
             </Select>
             <Input type="number" label="Refund / Credit Amount" error={errors.refund_amount?.message} {...register('refund_amount', { required: 'Amount is required', min: 0 })} />
-            <Input label="Reason" error={errors.reason?.message} {...register('reason', { required: 'Reason is required' })} />
+            <Select label="Reason" error={errors.reason?.message} {...register('reason', { required: 'Reason is required' })}>
+              <option value="">Select a reason</option>
+              <option value="Size issue">Size issue</option>
+              <option value="Colour issue">Colour issue</option>
+              <option value="Customer not satisfied">Customer not satisfied</option>
+            </Select>
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowReturnModal(false)}>
                 Cancel

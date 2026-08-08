@@ -18,6 +18,8 @@ export interface CartItem {
   cost_price?: number;
   discount_amount: number;
   product_name: string;
+  item_number?: string;
+  barcode_number?: string | null;
   size: string;
   color: string;
   is_instant_sale?: boolean;
@@ -115,6 +117,24 @@ export async function createSale(payload: CreateSalePayload) {
     throw new Error('Please add at least one item to complete the sale.');
   }
 
+  const inventoryItems = payload.items.filter((item) => !item.is_instant_sale);
+  const requiredByVariant = inventoryItems.reduce<Record<string, number>>((result, item) => {
+    result[item.variant_id] = (result[item.variant_id] ?? 0) + item.quantity;
+    return result;
+  }, {});
+  if (Object.keys(requiredByVariant).length) {
+    const { data: currentVariants, error: stockError } = await supabase
+      .from('product_variants')
+      .select('id,stock_quantity,is_active')
+      .in('id', Object.keys(requiredByVariant));
+    if (stockError) throw stockError;
+    for (const [variantId, required] of Object.entries(requiredByVariant)) {
+      const variant = currentVariants?.find((row) => row.id === variantId);
+      if (!variant || variant.is_active === false) throw new Error('A selected product variant is no longer available.');
+      if (Number(variant.stock_quantity) < required) throw new Error(`Stock changed: only ${Number(variant.stock_quantity)} item(s) are now available.`);
+    }
+  }
+
   const prefix = await getInvoicePrefix();
   const subtotal = payload.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const itemDiscount = payload.items.reduce((sum, item) => sum + item.discount_amount, 0);
@@ -130,6 +150,12 @@ export async function createSale(payload: CreateSalePayload) {
     payload.payment_method === 'credit'
       ? payload.paid_amount ?? 0
       : grandTotal;
+  const amountTendered = payload.payment_method === 'cash'
+    ? Math.max(Number(payload.paid_amount ?? grandTotal), grandTotal)
+    : paidAmount;
+  const changeDue = payload.payment_method === 'cash'
+    ? Math.max(amountTendered - grandTotal, 0)
+    : 0;
   const balanceDue = Math.max(grandTotal - paidAmount, 0);
 
   const { data: authData } = await supabase.auth.getUser();
@@ -147,6 +173,8 @@ export async function createSale(payload: CreateSalePayload) {
       tax_amount: taxAmount,
       total_amount: grandTotal,
       paid_amount: paidAmount,
+      amount_tendered: amountTendered,
+      change_due: changeDue,
       balance_due: balanceDue,
       payment_method: payload.payment_method,
       status: 'completed',
@@ -171,6 +199,8 @@ export async function createSale(payload: CreateSalePayload) {
     discount_amount: item.discount_amount,
     line_total: item.unit_price * item.quantity - item.discount_amount,
     product_name_snapshot: item.is_instant_sale ? `${item.product_name} (Instant Sale)` : item.product_name,
+    item_number_snapshot: item.item_number ?? null,
+    barcode_number_snapshot: item.barcode_number ?? null,
     size_snapshot: item.size,
     color_snapshot: item.color,
     product_name: item.is_instant_sale ? item.product_name : null,

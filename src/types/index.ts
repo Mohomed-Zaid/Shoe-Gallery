@@ -24,6 +24,8 @@ export interface Brand {
 export interface Product {
   id: string;
   code: string;
+  item_number?: string;
+  is_active?: boolean;
   name: string;
   category_id: string | null;
   brand_id: string | null;
@@ -41,6 +43,7 @@ export interface ProductVariant {
   selling_price: number;
   stock_quantity: number;
   barcode_number: string | null;
+  is_active?: boolean;
   created_at: string;
 }
 
@@ -91,6 +94,8 @@ export interface Sale {
   tax_amount: number;
   total_amount: number;
   paid_amount: number;
+  amount_tendered: number | null;
+  change_due: number;
   balance_due: number;
   payment_method: string;
   status: 'held' | 'completed' | 'cancelled';

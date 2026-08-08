@@ -24,7 +24,6 @@ interface VariantFormInputs {
   cost_price: number;
   selling_price: number;
   stock_quantity: number;
-  barcode_number: string;
 }
 
 export function ProductDetail() {
@@ -82,23 +81,6 @@ export function ProductDetail() {
     if (!id) return;
     setError(null);
 
-    const normalizedBarcode = data.barcode_number.trim();
-    if (!normalizedBarcode) {
-      setError('Barcode is required for every variant.');
-      return;
-    }
-
-    const { data: existingVariant, error: barcodeLookupError } = await productService.getVariantByBarcode(normalizedBarcode);
-    if (barcodeLookupError) {
-      setError(getErrorMessage(barcodeLookupError));
-      return;
-    }
-
-    if (existingVariant && existingVariant.id !== editingVariantId) {
-      setError('Barcode already exists. Please use a unique barcode.');
-      return;
-    }
-
     const payload = {
       product_id: id,
       size: data.size,
@@ -106,7 +88,6 @@ export function ProductDetail() {
       cost_price: Number(data.cost_price),
       selling_price: Number(data.selling_price),
       stock_quantity: Number(data.stock_quantity),
-      barcode_number: normalizedBarcode,
     };
 
     const result = editingVariantId
@@ -130,7 +111,6 @@ export function ProductDetail() {
       cost_price: variant.cost_price,
       selling_price: variant.selling_price,
       stock_quantity: variant.stock_quantity,
-      barcode_number: variant.barcode_number ?? '',
     });
     setShowModal(true);
   };
@@ -189,7 +169,7 @@ export function ProductDetail() {
         <div className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-dashboard-text-primary">Variants</h3>
-            <Button onClick={() => { setEditingVariantId(null); reset({ size: '', color: '', cost_price: 0, selling_price: 0, stock_quantity: 0, barcode_number: '' }); setShowModal(true); }}>
+            <Button onClick={() => { setEditingVariantId(null); reset(); setShowModal(true); }}>
               <Plus size={18} />
               Add Variant
             </Button>
@@ -199,7 +179,6 @@ export function ProductDetail() {
             columns={[
               { key: 'size', header: 'Size' },
               { key: 'color', header: 'Color' },
-              { key: 'barcode', header: 'Barcode' },
               { key: 'cost', header: 'Cost' },
               { key: 'price', header: 'Selling Price' },
               { key: 'stock', header: 'Stock' },
@@ -212,7 +191,6 @@ export function ProductDetail() {
               <tr key={variant.id} className="hover:bg-dashboard-hover">
                 <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{variant.size}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.color}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.barcode_number || '—'}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.cost_price)}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.selling_price)}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.stock_quantity}</td>
@@ -238,7 +216,6 @@ export function ProductDetail() {
             <Input id="cost_price" label="Cost Price" type="number" step="0.01" error={errors.cost_price?.message} {...register('cost_price', { required: 'Required', valueAsNumber: true })} />
             <Input id="selling_price" label="Selling Price" type="number" step="0.01" error={errors.selling_price?.message} {...register('selling_price', { required: 'Required', valueAsNumber: true })} />
             <Input id="stock_quantity" label="Stock Quantity" type="number" error={errors.stock_quantity?.message} {...register('stock_quantity', { required: 'Required', valueAsNumber: true })} />
-            <Input id="barcode_number" label="Barcode Number" placeholder="e.g. 100001" error={errors.barcode_number?.message} {...register('barcode_number', { required: 'Barcode is required' })} />
             <div className="flex gap-3 pt-4">
               <Button type="button" variant="secondary" className="flex-1" onClick={closeModal}>Cancel</Button>
               <Button type="submit" disabled={isSubmitting} className="flex-1">

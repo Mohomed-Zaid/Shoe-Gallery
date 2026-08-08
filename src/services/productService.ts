@@ -6,6 +6,14 @@ export interface ProductWithRelations extends Product {
   brand: Brand | null;
 }
 
+export interface POSProduct extends ProductWithRelations {
+  product_variants: ProductVariant[];
+}
+
+export interface POSProductSuggestion extends ProductWithRelations {
+  total_stock: number;
+}
+
 export async function getProductsWithRelations() {
   return supabase
     .from('products')
@@ -61,6 +69,85 @@ export async function getVariantByBarcode(barcodeNumber: string) {
     .select('id, barcode_number')
     .eq('barcode_number', barcodeNumber)
     .maybeSingle();
+}
+
+const posProductSelect = `
+  *,
+  category:categories(*),
+  brand:brands(*),
+  product_variants(*)
+`;
+
+export async function getPOSProductByItemNumber(itemNumber: string) {
+  return supabase
+    .from('products')
+    .select(posProductSelect)
+    .eq('item_number', itemNumber.trim())
+    .eq('is_active', true)
+    .maybeSingle();
+}
+
+export async function getPOSProductById(productId: string) {
+  return supabase
+    .from('products')
+    .select(posProductSelect)
+    .eq('id', productId)
+    .eq('is_active', true)
+    .maybeSingle();
+}
+
+export async function searchPOSProducts(query: string, limit = 8) {
+  const term = query.trim().replace(/[,%()]/g, '');
+  if (!term) return { data: [] as POSProductSuggestion[], error: null };
+
+  const [{ data: productRows, error: productError }, { data: barcodeRows, error: barcodeError }] = await Promise.all([
+    supabase
+      .from('products')
+      .select('*,category:categories(*),brand:brands(*),product_variants(stock_quantity,is_active)')
+      .eq('is_active', true)
+      .or(`item_number.ilike.%${term}%,name.ilike.%${term}%`)
+      .limit(limit),
+    supabase
+      .from('product_variants')
+      .select('product_id')
+      .ilike('barcode_number', `%${term}%`)
+      .eq('is_active', true)
+      .limit(limit),
+  ]);
+
+  if (productError || barcodeError) return { data: [], error: productError ?? barcodeError };
+  const barcodeProductIds = [...new Set((barcodeRows ?? []).map((row) => row.product_id))];
+  let barcodeProducts: typeof productRows = [];
+  if (barcodeProductIds.length) {
+    const result = await supabase
+      .from('products')
+      .select('*,category:categories(*),brand:brands(*),product_variants(stock_quantity,is_active)')
+      .in('id', barcodeProductIds)
+      .eq('is_active', true);
+    if (result.error) return { data: [], error: result.error };
+    barcodeProducts = result.data ?? [];
+  }
+
+  const unique = new Map<string, any>();
+  for (const product of [...(productRows ?? []), ...barcodeProducts]) unique.set(product.id, product);
+  const normalized = term.toLowerCase();
+  const data = [...unique.values()]
+    .map((product) => ({
+      ...product,
+      total_stock: (product.product_variants ?? [])
+        .filter((variant: ProductVariant) => variant.is_active !== false)
+        .reduce((sum: number, variant: ProductVariant) => sum + Math.max(Number(variant.stock_quantity), 0), 0),
+    }))
+    .sort((a, b) => {
+      const aNumber = a.item_number || a.code;
+      const bNumber = b.item_number || b.code;
+      const aExact = aNumber.toLowerCase() === normalized ? 0 : 1;
+      const bExact = bNumber.toLowerCase() === normalized ? 0 : 1;
+      return aExact - bExact || aNumber.localeCompare(bNumber, undefined, { numeric: true });
+    })
+    .slice(0, limit) as POSProductSuggestion[];
+
+  return { data, error: null };
 }
 
 export async function searchVariants(query: string) {
