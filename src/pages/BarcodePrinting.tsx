@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Printer, Search } from 'lucide-react';
 import type { ProductVariant, StoreSettings } from '../types';
 import * as productService from '../services/productService';
@@ -22,7 +22,6 @@ export function BarcodePrinting() {
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [copies,setCopies]=useState(1);
-  const printRef = useRef<HTMLDivElement>(null);
   const [printerSettings,setPrinterSettings]=useState<StoreSettings|null>(null);
 
   useEffect(()=>{void getStoreSettings().then(result=>{if(!result.error)setPrinterSettings(result.data as StoreSettings|null)})},[]);
@@ -83,7 +82,7 @@ export function BarcodePrinting() {
     }
     setError(null);
     try{
-      await printBarcodeLabels(printRef.current,{forceCustomPageSize:printerSettings?.barcode_force_custom_page_size??false,horizontalOffsetMm:Number(printerSettings?.barcode_horizontal_offset_mm??0),verticalOffsetMm:Number(printerSettings?.barcode_vertical_offset_mm??0)});
+      await printBarcodeLabels({barcodeNumber:selectedVariant.barcode_number,copies,barcodeWidth:Number(printerSettings?.barcode_width??1),barcodeHeight:Number(printerSettings?.barcode_height??30),horizontalOffsetMm:Number(printerSettings?.barcode_horizontal_offset_mm??0),verticalOffsetMm:Number(printerSettings?.barcode_vertical_offset_mm??0)});
     }catch(printError){
       console.error('Barcode printing failed:',printError);
       setError(printError instanceof Error?printError.message:'Barcode printing failed. Please check the printer connection and 30mm × 20mm driver paper size.');
@@ -174,7 +173,7 @@ export function BarcodePrinting() {
         <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-dashboard-text-sub"><strong className="text-dashboard-text-primary">Printer settings:</strong> Windows Settings → Printers &amp; Scanners → select the barcode printer → Printer Preferences → create/select 30mm × 20mm, Portrait, margins 0/minimum, scaling 100%. Select that printer in the browser dialog. Save as PDF tests layout only and does not confirm physical-printer compatibility.</div>
         <div className="mt-4 rounded-3xl border border-dashed border-white/15 bg-white p-6">
           {selectedVariant ? (
-            <div ref={printRef} className="barcode-print-root barcode-preview-shell bg-white p-0">
+            <div className="barcode-print-root barcode-preview-shell bg-white p-0">
               {Array.from({length:copies},(_,index)=><div className="barcode-label-print-item" key={index}>
                   <BarcodeLabel
                     barcodeNumber={selectedVariant.barcode_number}
