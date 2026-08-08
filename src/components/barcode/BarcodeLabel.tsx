@@ -17,15 +17,21 @@ export function BarcodeLabel({ barcodeNumber, barcodeWidth=1, barcodeHeight=30, 
   useEffect(() => {
     if (!svgRef.current || !barcodeNumber) return;
     svgRef.current.innerHTML = '';
-    JsBarcode(svgRef.current, barcodeNumber, {
-      format: 'CODE128',
-      width: fittedWidth,
-      height: barcodeHeight,
-      margin: 0,
-      displayValue: false,
-      background: '#ffffff',
-      lineColor: '#000000',
-    });
+    svgRef.current.dataset.barcodeError='false';
+    try {
+      JsBarcode(svgRef.current, barcodeNumber, {
+        format: 'CODE128',
+        width: fittedWidth,
+        height: barcodeHeight,
+        margin: 0,
+        displayValue: false,
+        background: '#ffffff',
+        lineColor: '#000000',
+      });
+    } catch(error) {
+      svgRef.current.dataset.barcodeError='true';
+      console.error('Barcode generation failed:',error);
+    }
   }, [barcodeHeight, barcodeNumber, fittedWidth]);
 
   return (
