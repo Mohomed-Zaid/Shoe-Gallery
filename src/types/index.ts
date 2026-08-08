@@ -180,6 +180,7 @@ export interface StoreSettings {
   barcode_horizontal_offset_mm?: number; barcode_vertical_offset_mm?: number;
   barcode_width?: number; barcode_height?: number; barcode_show_product_name?: boolean;
   receipt_paper_width_mm?: 58|80; receipt_left_padding_mm?:number; receipt_right_padding_mm?:number; receipt_top_padding_mm?:number; receipt_bottom_padding_mm?:number; receipt_font_size_px?:number;
+  receipt_orientation?:'portrait'|'landscape';
   receipt_show_logo?:boolean; receipt_show_customer?:boolean; receipt_show_barcode?:boolean; receipt_show_return_policy?:boolean;
   created_at: string;
   updated_at: string;
