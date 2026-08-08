@@ -51,7 +51,7 @@ export function ProductVariantSelector({ product, cartQuantities, lowStockLimit,
     buttonRefs.current[next]?.focus();
   };
 
-  return <Modal title="Select Product Variant" onClose={onClose} size="xl">
+  return <Modal title="Select Product Variant" onClose={onClose} size="xl" respectSidebar>
     <div className="space-y-4">
       <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[.04] p-3 sm:p-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-dashboard-accent/15 sm:h-16 sm:w-16">

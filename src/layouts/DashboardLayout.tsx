@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CreditCard, LogOut, Menu, Sun, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -51,7 +51,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </NavLink>
   );
 
-  return <div className="flex min-h-screen min-w-0 bg-dashboard-bg-deep">
+  return <div
+    className="flex min-h-screen min-w-0 bg-dashboard-bg-deep"
+    style={{ '--sidebar-width': isMobile ? '0px' : effectiveCollapsed ? '4.5rem' : '16rem' } as CSSProperties}
+  >
     {isMobile && mobileOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-30 bg-black/65 backdrop-blur-sm" onClick={() => setMobileOpen(false)}/>}
     {showSidebar && <aside className={`glass-sidebar z-40 shrink-0 transition-[width,transform] duration-200 ${isMobile ? 'fixed inset-y-0 left-0 w-[min(17rem,86vw)] overflow-y-auto' : effectiveCollapsed ? 'w-[4.5rem]' : 'w-64'}`}>
       <div className={`flex items-center border-b border-white/10 p-4 ${effectiveCollapsed ? 'justify-center' : 'justify-between'}`}>
