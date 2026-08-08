@@ -19,6 +19,7 @@ import {
 } from '../components/ui';
 
 interface VariantFormInputs {
+  barcode_number: string;
   size: string;
   color: string;
   cost_price: number;
@@ -81,8 +82,20 @@ export function ProductDetail() {
     if (!id) return;
     setError(null);
 
+    const barcodeNumber = data.barcode_number.trim();
+    const barcodeResult = await productService.getVariantByBarcode(barcodeNumber);
+    if (barcodeResult.error) {
+      setError(getErrorMessage(barcodeResult.error, 'Unable to validate barcode'));
+      return;
+    }
+    if (barcodeResult.data && barcodeResult.data.id !== editingVariantId) {
+      setError('This barcode is already assigned to another product variant.');
+      return;
+    }
+
     const payload = {
       product_id: id,
+      barcode_number: barcodeNumber,
       size: data.size,
       color: data.color,
       cost_price: Number(data.cost_price),
@@ -92,7 +105,7 @@ export function ProductDetail() {
 
     const result = editingVariantId
       ? await productService.updateVariant(editingVariantId, payload)
-      : await productService.createVariant({ ...payload, barcode_number: null });
+      : await productService.createVariant(payload);
 
     if (result.error) {
       setError(getErrorMessage(result.error));
@@ -106,6 +119,7 @@ export function ProductDetail() {
   const handleEditVariant = (variant: ProductVariant) => {
     setEditingVariantId(variant.id);
     reset({
+      barcode_number: variant.barcode_number ?? '',
       size: variant.size,
       color: variant.color,
       cost_price: variant.cost_price,
@@ -177,6 +191,7 @@ export function ProductDetail() {
 
           <DataTable
             columns={[
+              { key: 'barcode', header: 'Barcode' },
               { key: 'size', header: 'Size' },
               { key: 'color', header: 'Color' },
               { key: 'cost', header: 'Cost' },
@@ -189,6 +204,7 @@ export function ProductDetail() {
           >
             {variants.map((variant) => (
               <tr key={variant.id} className="hover:bg-dashboard-hover">
+                <td className="px-6 py-4 text-sm font-medium text-sky-300">{variant.barcode_number || '—'}</td>
                 <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{variant.size}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.color}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.cost_price)}</td>
@@ -211,6 +227,8 @@ export function ProductDetail() {
       {showModal && (
         <Modal title={editingVariantId ? 'Edit Variant' : 'Add Variant'} onClose={closeModal}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {error && <Alert message={error} />}
+            <Input id="barcode_number" label="Barcode Number" placeholder="Scan or enter barcode" error={errors.barcode_number?.message} {...register('barcode_number', { required: 'Barcode number is required', setValueAs: (value) => String(value).trim() })} />
             <Input id="size" label="Size" error={errors.size?.message} {...register('size', { required: 'Size is required' })} />
             <Input id="color" label="Color" error={errors.color?.message} {...register('color', { required: 'Color is required' })} />
             <Input id="cost_price" label="Cost Price" type="number" step="0.01" error={errors.cost_price?.message} {...register('cost_price', { required: 'Required', valueAsNumber: true })} />

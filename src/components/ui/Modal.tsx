@@ -30,7 +30,7 @@ export function Modal({ title, children, onClose, size = 'md' }: ModalProps) {
     return () => { window.removeEventListener('keydown', handleKeyDown); document.body.style.overflow = previousOverflow; previouslyFocused?.focus(); };
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-labelledby="responsive-modal-title">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-labelledby="responsive-modal-title">
       <div className={`glass-card relative flex max-h-[100dvh] w-full flex-col rounded-none shadow-glass-lg sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl ${sizeClasses[size]}`}>
         <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/10 bg-[#061711]/95 px-4 py-3 sm:px-5">
           <h2 id="responsive-modal-title" className="min-w-0 truncate text-lg font-bold text-dashboard-text-primary sm:text-xl">{title}</h2>
