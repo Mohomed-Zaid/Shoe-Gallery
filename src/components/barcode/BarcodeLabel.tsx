@@ -6,9 +6,13 @@ export interface BarcodeLabelProps {
   barcodeNumber: string | null;
   sellingPrice: number;
   className?: string;
+  productName?: string | null;
+  showProductName?: boolean;
+  barcodeWidth?: number;
+  barcodeHeight?: number;
 }
 
-export function BarcodeLabel({ barcodeNumber, sellingPrice, className = '' }: BarcodeLabelProps) {
+export function BarcodeLabel({ barcodeNumber, sellingPrice, productName, showProductName=false, barcodeWidth=1.35, barcodeHeight=38, className = '' }: BarcodeLabelProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -16,22 +20,23 @@ export function BarcodeLabel({ barcodeNumber, sellingPrice, className = '' }: Ba
     svgRef.current.innerHTML = '';
     JsBarcode(svgRef.current, barcodeNumber, {
       format: 'CODE128',
-      width: 1.5,
-      height: 35,
+      width: barcodeWidth,
+      height: barcodeHeight,
       margin: 0,
       displayValue: false,
       background: '#ffffff',
       lineColor: '#000000',
     });
-  }, [barcodeNumber]);
+  }, [barcodeHeight, barcodeNumber, barcodeWidth]);
 
   return (
-    <div className={`flex h-[30mm] w-[50mm] flex-col items-center justify-center bg-white overflow-hidden ${className}`}>
-      <svg ref={svgRef} style={{ width: '35mm', height: '12mm' }} />
-      <div className="mt-[1mm] text-[3mm] font-semibold tracking-wider text-black leading-none">
+    <div className={`barcode-label ${className}`}>
+      {showProductName&&productName&&<div className="barcode-label-name">{productName}</div>}
+      <svg ref={svgRef} className="barcode-svg" style={{ width:'44mm',maxWidth:'44mm',height:`${Math.min(barcodeHeight*.2646,10)}mm` }} />
+      <div className="barcode-label-number">
         {barcodeNumber || '—'}
       </div>
-      <div className="mt-[2mm] text-[4mm] font-bold text-black leading-none">
+      <div className="barcode-label-price">
         {formatCurrency(sellingPrice)}
       </div>
     </div>

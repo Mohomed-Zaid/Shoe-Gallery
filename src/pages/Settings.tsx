@@ -27,6 +27,9 @@ interface SettingsFormValues {
   tax_percentage: number;
   invoice_prefix: string;
   default_low_stock_limit: number;
+  receipt_printing: 'ask' | 'automatic' | 'none';
+  receipt_paper_width_mm:58|80; receipt_left_padding_mm:number; receipt_right_padding_mm:number; receipt_top_padding_mm:number; receipt_bottom_padding_mm:number; receipt_font_size_px:number; receipt_show_logo:boolean; receipt_show_customer:boolean; receipt_show_barcode:boolean; receipt_show_return_policy:boolean;
+  barcode_label_width_mm:number; barcode_label_height_mm:number; barcode_orientation:'portrait'|'landscape'; barcode_horizontal_offset_mm:number; barcode_vertical_offset_mm:number; barcode_width:number; barcode_height:number; barcode_show_product_name:boolean;
 }
 
 export function Settings() {
@@ -63,6 +66,9 @@ export function Settings() {
           tax_percentage: Number(nextSettings.tax_percentage),
           invoice_prefix: nextSettings.invoice_prefix,
           default_low_stock_limit: nextSettings.default_low_stock_limit,
+          receipt_printing: nextSettings.receipt_printing || 'automatic',
+          receipt_paper_width_mm:nextSettings.receipt_paper_width_mm??80,receipt_left_padding_mm:Number(nextSettings.receipt_left_padding_mm??4),receipt_right_padding_mm:Number(nextSettings.receipt_right_padding_mm??4),receipt_top_padding_mm:Number(nextSettings.receipt_top_padding_mm??2),receipt_bottom_padding_mm:Number(nextSettings.receipt_bottom_padding_mm??2),receipt_font_size_px:Number(nextSettings.receipt_font_size_px??11),receipt_show_logo:nextSettings.receipt_show_logo??false,receipt_show_customer:nextSettings.receipt_show_customer??true,receipt_show_barcode:nextSettings.receipt_show_barcode??false,receipt_show_return_policy:nextSettings.receipt_show_return_policy??true,
+          barcode_label_width_mm:Number(nextSettings.barcode_label_width_mm??50),barcode_label_height_mm:Number(nextSettings.barcode_label_height_mm??30),barcode_orientation:nextSettings.barcode_orientation??'portrait',barcode_horizontal_offset_mm:Number(nextSettings.barcode_horizontal_offset_mm??0),barcode_vertical_offset_mm:Number(nextSettings.barcode_vertical_offset_mm??0),barcode_width:Number(nextSettings.barcode_width??1.35),barcode_height:Number(nextSettings.barcode_height??38),barcode_show_product_name:nextSettings.barcode_show_product_name??false,
         });
       }
     }
@@ -88,6 +94,9 @@ export function Settings() {
       tax_percentage: Number(values.tax_percentage),
       invoice_prefix: values.invoice_prefix,
       default_low_stock_limit: Number(values.default_low_stock_limit),
+      receipt_printing: values.receipt_printing,
+      receipt_paper_width_mm:Number(values.receipt_paper_width_mm) as 58|80,receipt_left_padding_mm:Number(values.receipt_left_padding_mm),receipt_right_padding_mm:Number(values.receipt_right_padding_mm),receipt_top_padding_mm:Number(values.receipt_top_padding_mm),receipt_bottom_padding_mm:Number(values.receipt_bottom_padding_mm),receipt_font_size_px:Number(values.receipt_font_size_px),receipt_show_logo:Boolean(values.receipt_show_logo),receipt_show_customer:Boolean(values.receipt_show_customer),receipt_show_barcode:Boolean(values.receipt_show_barcode),receipt_show_return_policy:Boolean(values.receipt_show_return_policy),
+      barcode_label_width_mm:Number(values.barcode_label_width_mm),barcode_label_height_mm:Number(values.barcode_label_height_mm),barcode_orientation:values.barcode_orientation,barcode_horizontal_offset_mm:Number(values.barcode_horizontal_offset_mm),barcode_vertical_offset_mm:Number(values.barcode_vertical_offset_mm),barcode_width:Number(values.barcode_width),barcode_height:Number(values.barcode_height),barcode_show_product_name:Boolean(values.barcode_show_product_name),
     });
 
     if (updateError) {
@@ -154,6 +163,12 @@ export function Settings() {
                 <Input type="number" step="0.01" label="Tax Percentage" {...register('tax_percentage', { valueAsNumber: true })} />
                 <Input label="Invoice Prefix" {...register('invoice_prefix', { required: 'Invoice prefix is required' })} />
                 <Input type="number" label="Default Low Stock Limit" {...register('default_low_stock_limit', { valueAsNumber: true })} />
+                <Select label="Receipt Printing" {...register('receipt_printing')}>
+                  <option value="automatic">Automatically Open Print Dialog</option><option value="ask">Ask Before Printing</option><option value="none">Do Not Print</option>
+                </Select>
+                <Select label="Receipt Paper Width" {...register('receipt_paper_width_mm',{valueAsNumber:true})}><option value="58">58mm</option><option value="80">80mm</option></Select>
+                <Input type="number" step="0.5" label="Receipt Font Size (px)" {...register('receipt_font_size_px',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Left Padding (mm)" {...register('receipt_left_padding_mm',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Right Padding (mm)" {...register('receipt_right_padding_mm',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Top Padding (mm)" {...register('receipt_top_padding_mm',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Bottom Padding (mm)" {...register('receipt_bottom_padding_mm',{valueAsNumber:true})}/>
+                <label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_logo')}/> Show store logo</label><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_customer')}/> Show customer</label><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_barcode')}/> Show barcode</label><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_return_policy')}/> Show return policy</label>
               </div>
             </div>
 
@@ -163,6 +178,7 @@ export function Settings() {
                 {isSubmitting ? 'Saving...' : 'Save Settings'}
               </Button>
             </div>
+            <div className="border-t border-white/10 pt-6"><h3 className="text-lg font-semibold text-dashboard-text-primary">Barcode Printer</h3><p className="mt-1 text-sm text-dashboard-text-sub">Physical label dimensions and Zebra-style printer alignment.</p><div className="mt-4 grid gap-4 md:grid-cols-2"><Input type="number" step="0.1" label="Label Width (mm)" {...register('barcode_label_width_mm',{valueAsNumber:true})}/><Input type="number" step="0.1" label="Label Height (mm)" {...register('barcode_label_height_mm',{valueAsNumber:true})}/><Select label="Orientation" {...register('barcode_orientation')}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></Select><Input type="number" step="0.1" label="Horizontal Offset (mm)" {...register('barcode_horizontal_offset_mm',{valueAsNumber:true})}/><Input type="number" step="0.1" label="Vertical Offset (mm)" {...register('barcode_vertical_offset_mm',{valueAsNumber:true})}/><Input type="number" step="0.05" label="Barcode Width" {...register('barcode_width',{valueAsNumber:true})}/><Input type="number" step="1" label="Barcode Height" {...register('barcode_height',{valueAsNumber:true})}/><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('barcode_show_product_name')}/> Show product name on label</label></div></div>
           </div>
         </form>
 

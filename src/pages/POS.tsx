@@ -80,6 +80,7 @@ export function POS() {
   const [itemNumberProduct, setItemNumberProduct] = useState<POSProduct | null>(null);
   const [keepVariantGridOpen, setKeepVariantGridOpen] = useState(() => localStorage.getItem('pos-keep-variant-grid-open') === 'true');
   const [lowStockLimit, setLowStockLimit] = useState(10);
+  const [receiptPrintMode, setReceiptPrintMode] = useState<'ask' | 'automatic' | 'none'>('automatic');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDiscount, setCartDiscount] = useState(0);
   const [amountReceived, setAmountReceived] = useState(0);
@@ -121,6 +122,7 @@ export function POS() {
       setCustomers((customersResult.data as Customer[]) ?? []);
       setHeldSales((heldSalesResult.data as HeldSaleWithCustomer[]) ?? []);
       setLowStockLimit(Number(settingsResult.data?.default_low_stock_limit ?? 10));
+      setReceiptPrintMode(settingsResult.data?.receipt_printing || 'automatic');
     }
     setLoading(false);
   }, []);
@@ -423,11 +425,12 @@ export function POS() {
 
       setLastSaleId(sale.id);
       clearCart();
-      navigate(`/sales/${sale.id}?print=1`);
+      const shouldPrint = receiptPrintMode === 'automatic' || (receiptPrintMode === 'ask' && window.confirm('Sale completed. Print receipt now?'));
+      navigate(`/sales/${sale.id}${shouldPrint ? '?print=1' : ''}`);
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }, [activeHeldSaleId, amountReceived, cart, cartDiscount, clearCart, grandTotal, maximumCartDiscount, navigate, paymentMethod, saleNotes, selectedCustomerId]);
+  }, [activeHeldSaleId, amountReceived, cart, cartDiscount, clearCart, grandTotal, maximumCartDiscount, navigate, paymentMethod, receiptPrintMode, saleNotes, selectedCustomerId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

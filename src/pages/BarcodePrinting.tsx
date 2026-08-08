@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Printer, Search, Plus, Minus } from 'lucide-react';
-import type { ProductVariant } from '../types';
+import { Printer, Search } from 'lucide-react';
+import type { ProductVariant, StoreSettings } from '../types';
 import * as productService from '../services/productService';
 import { Alert, Button, Input, LoadingSpinner, PageHeader } from '../components/ui';
 import { BarcodeLabel } from '../components/barcode/BarcodeLabel';
 import { formatCurrency } from '../utils/format';
 import { buildPrintStyles } from '../utils/print';
+import { getStoreSettings } from '../services/settingsService';
 
 interface VariantWithProduct extends ProductVariant {
   product: {
@@ -19,11 +20,13 @@ export function BarcodePrinting() {
   const [query, setQuery] = useState('');
   const [variants, setVariants] = useState<VariantWithProduct[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string>('');
-  const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const [printerSettings,setPrinterSettings]=useState<StoreSettings|null>(null);
+
+  useEffect(()=>{void getStoreSettings().then(result=>{if(!result.error)setPrinterSettings(result.data as StoreSettings|null)})},[]);
 
   const selectedVariant = useMemo(
     () => variants.find((variant) => variant.id === selectedVariantId) ?? null,
@@ -73,7 +76,8 @@ export function BarcodePrinting() {
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Barcode-${selectedVariant?.barcode_number ?? 'label'}`,
-    pageStyle: buildPrintStyles(),
+    ignoreGlobalStyles: true,
+    pageStyle: buildPrintStyles({horizontalOffsetMm:Number(printerSettings?.barcode_horizontal_offset_mm??0),verticalOffsetMm:Number(printerSettings?.barcode_vertical_offset_mm??0),barcodeHeight:Number(printerSettings?.barcode_height??35)}),
   });
 
   const printLabels = () => {
@@ -146,21 +150,6 @@ export function BarcodePrinting() {
 
         <div className="glass-card p-6 space-y-4">
           <h3 className="text-lg font-semibold text-dashboard-text-primary">Print Controls</h3>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-dashboard-text-label">Quantity</label>
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="secondary" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
-                <Minus size={16} />
-              </Button>
-              <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-center font-semibold text-dashboard-text-primary">
-                {quantity}
-              </div>
-              <Button type="button" variant="secondary" onClick={() => setQuantity((current) => current + 1)}>
-                <Plus size={16} />
-              </Button>
-            </div>
-          </div>
-
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-dashboard-text-sub">
             <p className="font-semibold text-dashboard-text-primary">Selected variant</p>
             <p>{selectedVariant?.product?.name || 'No variant selected'}</p>
@@ -171,24 +160,29 @@ export function BarcodePrinting() {
 
           <Button onClick={printLabels} className="w-full">
             <Printer size={18} />
-            Print Label{quantity > 1 ? 's' : ''}
+            Print Label
           </Button>
+          <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub">For correct printing, select the Zebra printer and use:<br/>Paper Size: 50mm × 30mm<br/>Scale: 100%<br/>Margins: None<br/>Headers and Footers: Off</p>
         </div>
       </div>
 
       <div className="glass-card p-6">
         <h3 className="text-lg font-semibold text-dashboard-text-primary">Preview</h3>
+        <p className="mt-1 text-sm text-dashboard-text-sub">Actual label size: {Number(printerSettings?.barcode_label_width_mm??50)}mm × {Number(printerSettings?.barcode_label_height_mm??30)}mm</p>
+        <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-dashboard-text-sub"><strong className="text-dashboard-text-primary">Printer settings:</strong> Destination: Zebra label printer · Paper: 50mm × 30mm · Scale: 100% · Margins: None · Headers and footers: Off. Configure this paper size in the Zebra driver; Microsoft Print to PDF may still preview a standard page.</div>
         <div className="mt-4 rounded-3xl border border-dashed border-white/15 bg-white p-6">
           {selectedVariant ? (
-            <div ref={printRef} className="barcode-label-print-area flex flex-wrap gap-[3mm] bg-white p-0">
-              {Array.from({ length: quantity }).map((_, index) => (
-                <div key={`${selectedVariant.id}-${index}`} className="barcode-label-print-item">
+            <div ref={printRef} className="barcode-print-root barcode-preview-shell bg-white p-0">
+              <div className="barcode-label-print-item">
                   <BarcodeLabel
                     barcodeNumber={selectedVariant.barcode_number}
                     sellingPrice={selectedVariant.selling_price}
+                    showProductName={false}
+                    barcodeWidth={Number(printerSettings?.barcode_width??1.35)}
+                    barcodeHeight={Number(printerSettings?.barcode_height??38)}
+                    className="barcode-preview-label"
                   />
-                </div>
-              ))}
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
