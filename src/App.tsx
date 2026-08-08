@@ -29,6 +29,7 @@ import { SubscriptionGuard } from './components/auth/SubscriptionGuard';
 import { SubscriptionExpiredPage } from './pages/SubscriptionExpiredPage';
 import { SubscriptionManagementPage } from './pages/admin/SubscriptionManagementPage';
 import { LoadingSpinner } from './components/ui';
+import { PWAStatus } from './components/pwa/PWAStatus';
 
 const BarcodePrinting = lazy(() => import('./pages/BarcodePrinting').then((module) => ({ default: module.BarcodePrinting })));
 const POS = lazy(() => import('./pages/POS').then((module) => ({ default: module.POS })));
@@ -38,6 +39,7 @@ const SalesReportPage = lazy(() => import('./pages/SalesReportPage').then((modul
 function App() {
   return (
     <ThemeProvider>
+      <PWAStatus />
       <BrowserRouter>
         <AuthProvider>
           <Routes>

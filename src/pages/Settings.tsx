@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Save, Shield } from 'lucide-react';
+import { Download, Save, Shield } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { Profile, StoreSettings, UserRole } from '../types';
 import * as settingsService from '../services/settingsService';
@@ -15,6 +15,7 @@ import {
   Textarea,
 } from '../components/ui';
 import { SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
+import { usePWAInstall } from '../pwa/install';
 
 interface SettingsFormValues {
   store_name: string;
@@ -33,6 +34,7 @@ interface SettingsFormValues {
 }
 
 export function Settings() {
+  const pwa = usePWAInstall();
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +139,16 @@ export function Settings() {
       {error && <Alert message={error} />}
       {success && <Alert message={success} />}
 
+      {!pwa.isInstalled && (
+        <div className="glass-card flex flex-wrap items-center justify-between gap-4 p-4">
+          <div className="relative z-10">
+            <p className="font-semibold text-dashboard-text-primary">Shoe Gallery POS Desktop App</p>
+            <p className="text-sm text-dashboard-text-sub">{pwa.canInstall ? 'Ready to install on this computer.' : 'Install support is preparing. Use Chrome or Edge and reload once.'}</p>
+          </div>
+          <Button className="relative z-10" type="button" disabled={!pwa.canInstall} onClick={async()=>{const installed=await pwa.install();if(installed)setSuccess('Shoe Gallery POS installed successfully.')}}><Download size={16}/>Install Desktop App</Button>
+        </div>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <form onSubmit={handleSubmit(onSubmit)} className="glass-card p-6">
           <div className="relative z-10 space-y-6">
@@ -182,6 +194,8 @@ export function Settings() {
           </div>
         </form>
 
+        <div className="space-y-6">
+        <section className="glass-card p-6"><div className="relative z-10"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-dashboard-accent/20"><Download size={18}/></div><div><h3 className="text-lg font-semibold text-dashboard-text-primary">Desktop App</h3><p className="text-sm text-dashboard-text-sub">Install Shoe Gallery POS on this Windows computer.</p></div></div><div className="space-y-2 text-sm text-dashboard-text-sub"><p>1. Open Shoe Gallery POS in Chrome or Edge.</p><p>2. Click “Install Desktop App.”</p><p>3. Confirm installation.</p><p>4. Launch it from the desktop or Start menu.</p></div><div className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><p><span className="text-dashboard-text-sub">Install status:</span> {pwa.isInstalled?'Installed':pwa.canInstall?'Available':'Not currently available'}</p><p><span className="text-dashboard-text-sub">App version:</span> {import.meta.env.VITE_APP_VERSION||'0.0.0'}</p><p><span className="text-dashboard-text-sub">Update status:</span> Updates are checked automatically</p><p><span className="text-dashboard-text-sub">Connection:</span> {navigator.onLine?'Online':'Offline'}</p></div>{pwa.canInstall&&<Button className="mt-5" type="button" onClick={async()=>{const installed=await pwa.install();if(installed)setSuccess('Shoe Gallery POS installed successfully.')}}><Download size={16}/>Install Desktop App</Button>}{!pwa.isInstalled&&!pwa.canInstall&&<p className="mt-4 text-xs text-dashboard-text-sub">If installation is supported, use the install icon in the Chrome or Edge address bar. Installation requires HTTPS in production.</p>}</div></section>
         <div className="glass-card p-6">
           <div className="relative z-10">
             <div className="mb-5 flex items-center gap-3">
@@ -218,7 +232,7 @@ export function Settings() {
               ))}
             </div>
           </div>
-        </div>
+        </div></div>
       </div>
     </div>
   );
