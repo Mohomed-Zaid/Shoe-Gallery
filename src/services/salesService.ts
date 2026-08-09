@@ -125,20 +125,27 @@ export async function createSale(payload: CreateSalePayload) {
     result[item.variant_id] = (result[item.variant_id] ?? 0) + item.quantity;
     return result;
   }, {});
-  if (Object.keys(requiredByVariant).length) {
-    const { data: currentVariants, error: stockError } = await supabase
+  const variantIds = Object.keys(requiredByVariant);
+  const stockLookup = variantIds.length
+    ? supabase
       .from('product_variants')
       .select('id,stock_quantity,is_active')
-      .in('id', Object.keys(requiredByVariant));
-    if (stockError) throw stockError;
-    for (const [variantId, required] of Object.entries(requiredByVariant)) {
-      const variant = currentVariants?.find((row) => row.id === variantId);
-      if (!variant || variant.is_active === false) throw new Error('A selected product variant is no longer available.');
-      if (Number(variant.stock_quantity) < required) throw new Error(`Stock changed: only ${Number(variant.stock_quantity)} item(s) are now available.`);
-    }
+      .in('id', variantIds)
+    : Promise.resolve({ data: [], error: null });
+  const [stockResult, prefix, authResult] = await Promise.all([
+    stockLookup,
+    getInvoicePrefix(),
+    supabase.auth.getUser(),
+  ]);
+  if (stockResult.error) throw stockResult.error;
+
+  const currentVariants = stockResult.data ?? [];
+  for (const [variantId, required] of Object.entries(requiredByVariant)) {
+    const variant = currentVariants.find((row) => row.id === variantId);
+    if (!variant || variant.is_active === false) throw new Error('A selected product variant is no longer available.');
+    if (Number(variant.stock_quantity) < required) throw new Error(`Stock changed: only ${Number(variant.stock_quantity)} item(s) are now available.`);
   }
 
-  const prefix = await getInvoicePrefix();
   const subtotal = payload.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const itemDiscount = payload.items.reduce((sum, item) => sum + item.discount_amount, 0);
   const discountAmount = (payload.discount_amount ?? 0) + itemDiscount;
@@ -161,7 +168,7 @@ export async function createSale(payload: CreateSalePayload) {
     : 0;
   const balanceDue = Math.max(grandTotal - paidAmount, 0);
 
-  const { data: authData } = await supabase.auth.getUser();
+  const authData = authResult.data;
   const invoiceNumber = buildInvoiceNumber(prefix);
 
   const { data: sale, error: saleError } = await supabase
@@ -210,47 +217,84 @@ export async function createSale(payload: CreateSalePayload) {
     is_instant_sale: item.is_instant_sale ?? false,
   }));
 
-  const { error: saleItemsError } = await supabase.from('sale_items').insert(saleItems);
-  if (saleItemsError) {
-    throw saleItemsError;
-  }
+  const saveSaleItems = async () => {
+    const { error } = await supabase.from('sale_items').insert(saleItems);
+    if (error) throw error;
+  };
 
-  if (paidAmount > 0) {
-    const { error: paymentError } = await supabase.from('sale_payments').insert({
+  const savePayment = async () => {
+    if (paidAmount <= 0) return;
+    const { error } = await supabase.from('sale_payments').insert({
       sale_id: sale.id,
       payment_method: payload.payment_method,
       amount: paidAmount,
       payment_date: new Date().toISOString(),
       received_by: authData.user?.id ?? null,
     });
-    if (paymentError) throw paymentError;
-  }
+    if (error) throw error;
+  };
 
-  for (const item of payload.items) {
-    if (!item.is_instant_sale && item.variant_id) {
-      await adjustStock(item.variant_id, 'sale', item.quantity, `Sale ${invoiceNumber}`);
-    }
-  }
+  const updateInventory = async () => {
+    if (!variantIds.length) return;
 
-  if (payload.customer_id) {
-    const { data: customer } = await supabase
+    const inventoryChanges = Object.entries(requiredByVariant).map(([variantId, quantity]) => {
+      const variant = currentVariants.find((row) => row.id === variantId)!;
+      const previousQuantity = Number(variant.stock_quantity);
+      return {
+        variantId,
+        quantity,
+        previousQuantity,
+        newQuantity: previousQuantity - quantity,
+      };
+    });
+
+    await Promise.all(inventoryChanges.map(async (change) => {
+      const { data, error } = await supabase
+        .from('product_variants')
+        .update({ stock_quantity: change.newQuantity })
+        .eq('id', change.variantId)
+        .eq('stock_quantity', change.previousQuantity)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Stock changed while completing the sale. Please check the cart and try again.');
+    }));
+
+    const { error } = await supabase.from('inventory_history').insert(inventoryChanges.map((change) => ({
+      variant_id: change.variantId,
+      change_type: 'sale',
+      quantity_changed: change.quantity,
+      previous_quantity: change.previousQuantity,
+      new_quantity: change.newQuantity,
+      reason: `Sale ${invoiceNumber}`,
+      user_id: authData.user?.id ?? null,
+    })));
+    if (error) throw error;
+  };
+
+  const updateCustomerBalance = async () => {
+    if (!payload.customer_id) return;
+    const { data: customer, error: customerError } = await supabase
       .from('customers')
       .select('outstanding_balance')
       .eq('id', payload.customer_id)
       .maybeSingle();
+    if (customerError) throw customerError;
 
     const currentBalance = Number((customer as Pick<Customer, 'outstanding_balance'> | null)?.outstanding_balance ?? 0);
-    const { error: customerUpdateError } = await supabase
+    const { error } = await supabase
       .from('customers')
-      .update({
-        outstanding_balance: currentBalance + balanceDue,
-      })
+      .update({ outstanding_balance: currentBalance + balanceDue })
       .eq('id', payload.customer_id);
+    if (error) throw error;
+  };
 
-    if (customerUpdateError) {
-      throw customerUpdateError;
-    }
-  }
+  await Promise.all([
+    saveSaleItems(),
+    savePayment(),
+    updateInventory(),
+    updateCustomerBalance(),
+  ]);
 
   return sale;
 }

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, CreditCard, LayoutGrid, Minus, Package2, Plus, Printer, ScanLine, Search, Trash2, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import type { Category, Customer, Product, ProductVariant } from '../types';
-import type { CartItem } from '../services/salesService';
+import type { Category, Customer, Product, ProductVariant, StoreSettings } from '../types';
+import type { CartItem, SaleWithRelations } from '../services/salesService';
 import * as categoryService from '../services/categoryService';
 import * as customerService from '../services/customerService';
 import * as productService from '../services/productService';
@@ -24,6 +24,8 @@ import {
 import { POSItemNumberInput } from '../components/pos/POSItemNumberInput';
 import { ProductVariantSelector } from '../components/pos/ProductVariantSelector';
 import type { POSProduct } from '../services/productService';
+import { ThermalReceipt } from '../components/receipt/ThermalReceipt';
+import { printReceiptAutomatically } from '../services/receiptPrintService';
 
 interface ProductWithCategory extends Product {
   category: Category | null;
@@ -80,7 +82,9 @@ export function POS() {
   const [itemNumberProduct, setItemNumberProduct] = useState<POSProduct | null>(null);
   const [keepVariantGridOpen, setKeepVariantGridOpen] = useState(() => localStorage.getItem('pos-keep-variant-grid-open') === 'true');
   const [lowStockLimit, setLowStockLimit] = useState(10);
-  const [receiptPrintMode, setReceiptPrintMode] = useState<'ask' | 'automatic' | 'none'>('automatic');
+  const [autoPrintAfterSale, setAutoPrintAfterSale] = useState(true);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [isCompletingSale, setIsCompletingSale] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDiscount, setCartDiscount] = useState(0);
   const [amountReceived, setAmountReceived] = useState(0);
@@ -100,6 +104,9 @@ export function POS() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const itemNumberInputRef = useRef<HTMLInputElement>(null);
   const cartRef = useRef<HTMLDivElement>(null);
+  const checkoutInProgressRef = useRef(false);
+  const automaticallyPrintedSaleIdsRef = useRef(new Set<string>());
+  const latestCompletedSaleIdRef = useRef<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -122,7 +129,8 @@ export function POS() {
       setCustomers((customersResult.data as Customer[]) ?? []);
       setHeldSales((heldSalesResult.data as HeldSaleWithCustomer[]) ?? []);
       setLowStockLimit(Number(settingsResult.data?.default_low_stock_limit ?? 10));
-      setReceiptPrintMode(settingsResult.data?.receipt_printing || 'automatic');
+      setAutoPrintAfterSale(settingsResult.data?.receipt_printing !== 'none');
+      setStoreSettings((settingsResult.data as StoreSettings | null) ?? null);
     }
     setLoading(false);
   }, []);
@@ -366,33 +374,27 @@ export function POS() {
     setShowHeldSalesModal(false);
   };
 
-  const openInvoicePrint = useCallback((saleId: string) => {
-    const existingFrame = document.getElementById('invoice-print-frame');
-    if (existingFrame) {
-      existingFrame.remove();
+  const printCompletedSale = useCallback(async (saleId: string) => {
+    const { data, error: saleLoadError } = await salesService.getSaleById(saleId);
+    if (saleLoadError || !data) {
+      throw saleLoadError ?? new Error('Completed sale could not be loaded for printing.');
     }
 
-    const iframe = document.createElement('iframe');
-    iframe.id = 'invoice-print-frame';
-    iframe.src = `/sales/${saleId}?print=1`;
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.position = 'fixed';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-
-    iframe.onload = () => {
-      window.setTimeout(() => {
-        iframe.remove();
-      }, 60000);
-    };
-
-    document.body.appendChild(iframe);
-  }, []);
+    const completedSale = data as SaleWithRelations;
+    await printReceiptAutomatically(
+      <ThermalReceipt
+        sale={completedSale}
+        items={completedSale.sale_items ?? []}
+        payments={completedSale.sale_payments ?? []}
+        customer={completedSale.customer}
+        store={storeSettings}
+      />,
+      { orientation: storeSettings?.receipt_orientation ?? 'landscape' },
+    );
+  }, [storeSettings]);
 
   const handleCompleteSale = useCallback(async () => {
+    if (checkoutInProgressRef.current) return;
     if (cart.length === 0) {
       setError('Add at least one item to complete the sale.');
       return;
@@ -408,8 +410,12 @@ export function POS() {
       return;
     }
 
+    checkoutInProgressRef.current = true;
+    setIsCompletingSale(true);
+
     try {
       setError(null);
+      setSuccess(null);
       const sale = await salesService.createSale({
         customer_id: selectedCustomerId === 'walk-in' ? null : selectedCustomerId,
         payment_method: paymentMethod,
@@ -420,17 +426,57 @@ export function POS() {
       });
 
       if (activeHeldSaleId) {
-        await salesService.deleteHeldSale(activeHeldSaleId);
+        try {
+          await salesService.deleteHeldSale(activeHeldSaleId);
+          setHeldSales((current) => current.filter((heldSale) => heldSale.id !== activeHeldSaleId));
+        } catch (heldSaleError) {
+          console.error('Completed held sale could not be removed:', heldSaleError);
+        }
       }
 
       setLastSaleId(sale.id);
+      latestCompletedSaleIdRef.current = sale.id;
+      const shouldPrintReceipt = autoPrintAfterSale && !automaticallyPrintedSaleIdsRef.current.has(sale.id);
+      if (shouldPrintReceipt) {
+        automaticallyPrintedSaleIdsRef.current.add(sale.id);
+      }
+
+      const soldQuantities = cart.reduce<Record<string, number>>((totals, item) => {
+        if (!item.is_instant_sale) {
+          totals[item.variant_id] = (totals[item.variant_id] ?? 0) + item.quantity;
+        }
+        return totals;
+      }, {});
+      setVariants((current) => current.map((variant) => ({
+        ...variant,
+        stock_quantity: Math.max(0, variant.stock_quantity - (soldQuantities[variant.id] ?? 0)),
+      })));
       clearCart();
-      const shouldPrint = receiptPrintMode === 'automatic' || (receiptPrintMode === 'ask' && window.confirm('Sale completed. Print receipt now?'));
-      navigate(`/sales/${sale.id}${shouldPrint ? '?print=1' : ''}`);
+      setSuccess(shouldPrintReceipt
+        ? 'Sale completed successfully. Printing receipt…'
+        : 'Sale completed successfully.');
+
+      if (shouldPrintReceipt) {
+        void printCompletedSale(sale.id).then(() => {
+          if (latestCompletedSaleIdRef.current === sale.id) {
+            setSuccess('Sale completed successfully and the receipt was sent to the printer.');
+          }
+        }).catch((printError) => {
+          console.error('Automatic receipt printing failed:', printError);
+          if (latestCompletedSaleIdRef.current === sale.id) {
+            setError('Sale completed successfully, but receipt could not be printed. Use Reprint Receipt to try again.');
+            setSuccess('Sale completed successfully.');
+          }
+        });
+      }
     } catch (err) {
       setError(getErrorMessage(err));
+    } finally {
+      checkoutInProgressRef.current = false;
+      setIsCompletingSale(false);
+      focusBarcodeInput();
     }
-  }, [activeHeldSaleId, amountReceived, cart, cartDiscount, clearCart, grandTotal, maximumCartDiscount, navigate, paymentMethod, receiptPrintMode, saleNotes, selectedCustomerId]);
+  }, [activeHeldSaleId, amountReceived, autoPrintAfterSale, cart, cartDiscount, clearCart, focusBarcodeInput, grandTotal, maximumCartDiscount, paymentMethod, printCompletedSale, saleNotes, selectedCustomerId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -454,9 +500,14 @@ export function POS() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [focusItemNumberInput, handleCompleteSale]);
 
-  const handlePrintInvoice = () => {
+  const handlePrintInvoice = async () => {
     if (!lastSaleId) return;
-    openInvoicePrint(lastSaleId);
+    setError(null);
+    try {
+      await printCompletedSale(lastSaleId);
+    } catch (printError) {
+      setError(getErrorMessage(printError, 'Receipt could not be printed.'));
+    }
   };
 
   const handleCreateCustomer = async (values: CustomerFormValues) => {
@@ -492,9 +543,9 @@ export function POS() {
               <Zap size={16} />
               Instant Billing
             </Button>
-            <Button variant="secondary" onClick={handlePrintInvoice} disabled={!lastSaleId}>
+            <Button variant="secondary" onClick={() => void handlePrintInvoice()} disabled={!lastSaleId || isCompletingSale}>
               <Printer size={16} />
-              Print Invoice
+              Reprint Receipt
             </Button>
           </div>
         }
@@ -749,9 +800,9 @@ export function POS() {
                 )}
               </div>
 
-              <Button className="w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0}>
+              <Button className="w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0 || isCompletingSale}>
                 <CreditCard size={16} />
-                Complete Sale
+                {isCompletingSale ? 'Completing Sale…' : 'Complete Sale'}
               </Button>
             </div>
           </div>
@@ -759,7 +810,7 @@ export function POS() {
       </div>
 
       {mobilePosTab === 'cart' && <div className="pos-mobile-checkout fixed inset-x-0 bottom-0 z-30 border-t border-white/15 bg-[#061711]/95 p-3 shadow-2xl backdrop-blur">
-        <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="text-xs text-dashboard-text-sub">Grand Total</p><p className="truncate text-lg font-bold text-dashboard-text-primary">{formatCurrency(grandTotal)}</p></div><Button className="min-h-12 flex-1" onClick={() => void handleCompleteSale()} disabled={!cart.length}><CreditCard size={17}/>Complete Sale</Button></div>
+        <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="text-xs text-dashboard-text-sub">Grand Total</p><p className="truncate text-lg font-bold text-dashboard-text-primary">{formatCurrency(grandTotal)}</p></div><Button className="min-h-12 flex-1" onClick={() => void handleCompleteSale()} disabled={!cart.length || isCompletingSale}><CreditCard size={17}/>{isCompletingSale ? 'Completing…' : 'Complete Sale'}</Button></div>
       </div>}
 
       {selectedProduct && (

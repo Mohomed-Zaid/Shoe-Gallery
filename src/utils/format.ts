@@ -12,3 +12,10 @@ export function formatCurrency(value: number): string {
     currency: 'LKR',
   }).format(value);
 }
+
+export function formatBarcodeLabelPrice(value: number): string {
+  return `RS. ${new Intl.NumberFormat('en-LK', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
+}

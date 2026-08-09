@@ -3,7 +3,7 @@
   height: 20mm;
   box-sizing: border-box;
   margin: 0;
-  padding: 0.2mm 0.8mm;
+  padding: 0.2mm 0.1mm;
   overflow: hidden;
   background: #fff !important;
   color: #000 !important;
@@ -13,15 +13,28 @@
 }
 
 .barcode-store-name {
-  height: 3.05mm;
+  height: 3.4mm;
   overflow: hidden;
   color: #000 !important;
-  font-size: 3mm;
+  font-size: 3.2mm;
   font-weight: 900;
-  line-height: 3.05mm;
+  line-height: 3.4mm;
   letter-spacing: 0.08mm;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.barcode-label-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.2mm;
+  width: 100%;
+  height: 16.2mm;
+  overflow: hidden;
+}
+
+.barcode-label-main {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .barcode-svg-wrapper {
@@ -55,7 +68,6 @@
   opacity: 1 !important;
 }
 
-.barcode-selling-price,
 .barcode-item-number,
 .barcode-number {
   width: 100%;
@@ -67,27 +79,39 @@
 }
 
 .barcode-selling-price {
-  height: 2.9mm;
-  margin-top: 0.1mm;
-  font-size: 2.9mm;
+  display: flex;
+  width: 2.2mm;
+  height: 16.2mm;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  color: #000 !important;
+  font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
+  font-size: 2.3mm;
   font-weight: 800;
-  line-height: 2.9mm;
+  line-height: 1;
+  letter-spacing: -0.04mm;
+  opacity: 1 !important;
+  text-align: center;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
 }
 
 .barcode-item-number {
-  height: 2mm;
-  margin-top: 0.1mm;
-  font-size: 2.05mm;
+  height: 3mm;
+  margin-top: 0.15mm;
+  font-size: 2.65mm;
   font-weight: 800;
-  line-height: 2mm;
+  line-height: 3mm;
   letter-spacing: 0.04mm;
 }
 
 .barcode-number {
-  height: 1.8mm;
-  font-size: 1.85mm;
+  height: 2.45mm;
+  font-size: 2.3mm;
   font-weight: 800;
-  line-height: 1.8mm;
+  line-height: 2.45mm;
   letter-spacing: 0.08mm;
 }
 

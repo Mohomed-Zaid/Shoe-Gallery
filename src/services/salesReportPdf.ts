@@ -6,13 +6,14 @@ const C={navy:[15,23,42] as [number,number,number],blue:[14,165,233] as [number,
 const rs=(value:number|null|undefined)=>value==null?'Not available':`Rs. ${Number(value).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const text=(value:unknown)=>value==null?'—':String(value);
 const uniqueBy=<T,>(rows:T[],key:(row:T)=>string)=>[...new Map(rows.map(row=>[key(row),row])).values()];
+const newestFirst=(left:string,right:string)=>(Date.parse(right)||0)-(Date.parse(left)||0);
 
 export async function downloadSalesReportPdf(data:SalesReportData,filters:SalesReportFilters,generatedBy:string){
  // Defensive de-duplication before any tables are generated.
- data.invoices=uniqueBy(data.invoices,x=>x.id);
+ data.invoices=uniqueBy(data.invoices,x=>x.id).sort((a,b)=>newestFirst(a.created_at,b.created_at));
  data.invoices.forEach(invoice=>{invoice.items=uniqueBy(invoice.items??[],item=>item.id)});
- data.payments=uniqueBy(data.payments,x=>x.id);
- data.returns=uniqueBy(data.returns,x=>x.id);
+ data.payments=uniqueBy(data.payments,x=>x.id).sort((a,b)=>newestFirst(a.payment_date,b.payment_date));
+ data.returns=uniqueBy(data.returns,x=>x.id).sort((a,b)=>newestFirst(a.created_at,b.created_at));
  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
  const fileName=`sales-report-${filters.startDate}-to-${filters.endDate}.pdf`;
  const header=(title:string)=>{doc.setFillColor(...C.navy);doc.rect(0,0,doc.internal.pageSize.getWidth(),25,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(data.store.store_name||'Shoe Gallery',12,10);doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text([data.store.address,data.store.phone,data.store.email].filter(Boolean).join('  |  ').slice(0,110),12,16);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(title,doc.internal.pageSize.getWidth()-12,11,{align:'right'});doc.setFont('helvetica','normal');doc.setFontSize(7);doc.text(`${filters.startDate} to ${filters.endDate}`,doc.internal.pageSize.getWidth()-12,17,{align:'right'});doc.setTextColor(...C.navy)};

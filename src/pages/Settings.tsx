@@ -18,8 +18,11 @@ import { SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
 import { usePWAInstall } from '../pwa/install';
 import { printReceiptQualityTest, printReceiptWidthTest } from '../services/receiptPrintService';
 import {
+  getReceiptPrintingMode,
   getReceiptPrintStyle,
+  setReceiptPrintingMode,
   setReceiptPrintStyle,
+  type ReceiptPrintingMode,
   type ReceiptPrintStyle,
 } from '../services/receiptPrintStyle';
 import {
@@ -42,6 +45,7 @@ interface SettingsFormValues {
   receipt_printing: 'ask' | 'automatic' | 'none';
   receipt_paper_width_mm:58|80; receipt_printable_width_mm:number; receipt_orientation:'portrait'|'landscape'; receipt_left_padding_mm:number; receipt_right_padding_mm:number; receipt_top_padding_mm:number; receipt_bottom_padding_mm:number; receipt_font_size_px:number; receipt_horizontal_offset_mm:number; receipt_show_logo:boolean; receipt_show_customer:boolean; receipt_show_barcode:boolean; receipt_show_return_policy:boolean;
   receipt_print_style: ReceiptPrintStyle;
+  receipt_printing_mode: ReceiptPrintingMode;
   barcode_horizontal_offset_mm:number; barcode_vertical_offset_mm:number; barcode_width:number; barcode_height:number;
   barcode_print_density: BarcodePrintDensity;
 }
@@ -91,7 +95,7 @@ export function Settings() {
           tax_percentage: Number(nextSettings.tax_percentage),
           invoice_prefix: nextSettings.invoice_prefix,
           default_low_stock_limit: nextSettings.default_low_stock_limit,
-          receipt_printing: nextSettings.receipt_printing || 'automatic',
+          receipt_printing: nextSettings.receipt_printing === 'none' ? 'none' : 'automatic',
           receipt_paper_width_mm: nextSettings.receipt_paper_width_mm ?? 80,
           receipt_printable_width_mm: Number(nextSettings.receipt_printable_width_mm ?? 72),
           receipt_orientation: nextSettings.receipt_orientation ?? 'landscape',
@@ -106,6 +110,7 @@ export function Settings() {
           receipt_show_barcode: nextSettings.receipt_show_barcode ?? false,
           receipt_show_return_policy: nextSettings.receipt_show_return_policy ?? true,
           receipt_print_style: getReceiptPrintStyle(),
+          receipt_printing_mode: getReceiptPrintingMode(),
           barcode_horizontal_offset_mm:Number(nextSettings.barcode_horizontal_offset_mm??0),barcode_vertical_offset_mm:Number(nextSettings.barcode_vertical_offset_mm??0),barcode_width:normaliseBarcodeWidth(nextSettings.barcode_width),barcode_height:normaliseBarcodeHeight(nextSettings.barcode_height),
           barcode_print_density: getBarcodePrintDensity(),
         });
@@ -156,6 +161,7 @@ export function Settings() {
     }
 
     setReceiptPrintStyle(values.receipt_print_style);
+    setReceiptPrintingMode(values.receipt_printing_mode);
     setBarcodePrintDensity(values.barcode_print_density);
     setSettings(data as StoreSettings);
     setSuccess('Settings updated successfully.');
@@ -255,10 +261,13 @@ export function Settings() {
                 Safe thermal-receipt width and edge calibration for the printer driver.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Select label="Receipt Printing" {...register('receipt_printing')}>
-                  <option value="automatic">Automatically Open Print Dialog</option>
-                  <option value="ask">Ask Before Printing</option>
-                  <option value="none">Do Not Print</option>
+                <Select label="Auto Print After Sale" {...register('receipt_printing')}>
+                  <option value="automatic">On</option>
+                  <option value="none">Off</option>
+                </Select>
+                <Select label="Printing Mode" {...register('receipt_printing_mode')}>
+                  <option value="browser">Browser Print</option>
+                  <option value="silent">Silent / Kiosk Print</option>
                 </Select>
                 <Select label="Print Style" {...register('receipt_print_style')}>
                   <option value="normal">Normal</option>
@@ -368,6 +377,7 @@ export function Settings() {
               <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub">
                 For an 80mm roll, start with 72mm printable width, 2mm left padding, 3mm right padding,
                 and 0mm horizontal offset. Print at 100% scale with zero/minimum driver margins. If the receipt prints too light, increase printer Darkness / Density in Windows printer preferences and reduce print speed slightly if characters are incomplete. If blank paper still feeds after the receipt, select continuous receipt-roll media instead of an A4 or fixed-length page and use the printer's minimum cut/feed setting.
+                Silent / Kiosk Print uses the same safe <code>window.print()</code> flow and becomes dialog-free only when Chrome or Edge is launched with kiosk printing enabled.
               </div>
             </div>
 

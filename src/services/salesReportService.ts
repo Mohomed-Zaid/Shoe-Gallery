@@ -2,11 +2,19 @@ import { supabase } from './supabase';
 import type { SalesReportData, SalesReportFilters } from '../types/salesReport';
 import { validateSalesReportFilters } from '../utils/salesReportValidation';
 
+function newestFirst(left: string, right: string) {
+  return (Date.parse(right) || 0) - (Date.parse(left) || 0);
+}
+
 export async function getSalesReport(filters: SalesReportFilters): Promise<SalesReportData> {
   validateSalesReportFilters(filters);
   const { data, error } = await supabase.rpc('get_sales_report', { p_filters: filters });
   if (error) throw error;
-  return data as SalesReportData;
+  const report = data as SalesReportData;
+  report.invoices.sort((a, b) => newestFirst(a.created_at, b.created_at));
+  report.payments.sort((a, b) => newestFirst(a.payment_date, b.payment_date));
+  report.returns.sort((a, b) => newestFirst(a.created_at, b.created_at));
+  return report;
 }
 
 const esc = (v:unknown) => `"${String(v ?? '').replaceAll('"','""')}"`;

@@ -5,7 +5,7 @@ import {
   type BarcodePrintDensity,
 } from '../../services/barcodeLabelPrintService';
 import '../../styles/barcode-label-print.css';
-import { formatCurrency } from '../../utils/format';
+import { formatBarcodeLabelPrice } from '../../utils/format';
 
 export interface BarcodeLabelProps {
   barcodeNumber: string;
@@ -38,14 +38,18 @@ export function BarcodeLabel({
   return (
     <div className={`barcode-label barcode-density-${density}`}>
       <div className="barcode-store-name">{storeName.trim() || 'SHOE GALLERY'}</div>
-      <div className="barcode-svg-wrapper">
-        <svg ref={svgRef} className="barcode-svg" aria-hidden="true" />
+      <div className="barcode-label-body">
+        <div className="barcode-label-main">
+          <div className="barcode-svg-wrapper">
+            <svg ref={svgRef} className="barcode-svg" aria-hidden="true" />
+          </div>
+          <div className="barcode-item-number">
+            {(itemNumber?.trim() || barcodeNumber)} - EACH
+          </div>
+          <div className="barcode-number">{barcodeNumber}</div>
+        </div>
+        <div className="barcode-selling-price">{formatBarcodeLabelPrice(sellingPrice)}</div>
       </div>
-      <div className="barcode-selling-price">{formatCurrency(sellingPrice)}</div>
-      <div className="barcode-item-number">
-        {(itemNumber?.trim() || barcodeNumber)} - EACH
-      </div>
-      <div className="barcode-number">{barcodeNumber}</div>
     </div>
   );
 }
