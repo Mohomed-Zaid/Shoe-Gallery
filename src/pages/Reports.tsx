@@ -64,10 +64,11 @@ function getRangeLabel(range: ReportRange, custom: DateRange) {
 }
 
 /* ─── Print-only Table Component ────────────────────────────────────────── */
-function ReportTable({ headers, rows, caption }: {
+function ReportTable({ headers, rows, caption, numericColumns = [] }: {
   headers: string[];
   rows: Array<(string | number)[]>;
   caption?: string;
+  numericColumns?: number[];
 }) {
   if (rows.length === 0) return <p className="report-muted">No data available.</p>;
   return (
@@ -75,8 +76,8 @@ function ReportTable({ headers, rows, caption }: {
       {caption && <caption>{caption}</caption>}
       <thead>
         <tr>
-          {headers.map((h) => (
-            <th key={h}>{h}</th>
+          {headers.map((h, index) => (
+            <th key={h} className={numericColumns.includes(index) ? 'report-number' : undefined}>{h}</th>
           ))}
         </tr>
       </thead>
@@ -84,7 +85,7 @@ function ReportTable({ headers, rows, caption }: {
         {rows.map((row, i) => (
           <tr key={i}>
             {row.map((cell, j) => (
-              <td key={j}>{cell}</td>
+              <td key={j} className={numericColumns.includes(j) ? 'report-number' : undefined}>{cell}</td>
             ))}
           </tr>
         ))}
@@ -348,95 +349,108 @@ export function Reports() {
           </div>
 
           {/* ─── Print-only structured PDF view ──────────────────────────── */}
-          <div ref={printRef} className="report-print-area">
+          <article ref={printRef} className="report-print-area business-report-print-area">
             {/* Cover header */}
-            <div className="report-header">
-              <h1>Shoe Gallery</h1>
-              <h2>Business Report</h2>
-              <p className="report-meta">Period: {rangeLabel} &nbsp;|&nbsp; Generated: {generatedAt}</p>
-            </div>
+            <header className="report-header">
+              <div className="report-brand-block">
+                <p className="report-eyebrow">Shoe Gallery POS</p>
+                <h1>Business Performance Report</h1>
+                <p className="report-subtitle">Sales, inventory, products, customers and suppliers</p>
+              </div>
+              <dl className="report-meta-grid">
+                <div><dt>Reporting period</dt><dd>{rangeLabel}</dd></div>
+                <div><dt>Generated</dt><dd>{generatedAt}</dd></div>
+              </dl>
+            </header>
 
             {/* 1. Sales Summary */}
-            <div className="report-section">
-              <h3>1. Sales Summary</h3>
+            <section className="report-section report-section--summary">
+              <div className="report-section-heading"><span>01</span><div><h2>Sales Summary</h2><p>Core performance for the selected period</p></div></div>
               <div className="report-kpi-grid">
                 <div className="report-kpi"><span className="report-kpi-label">Total Sales</span><span className="report-kpi-value">{formatCurrency(data.salesSummary.sales)}</span></div>
                 <div className="report-kpi"><span className="report-kpi-label">Orders</span><span className="report-kpi-value">{data.salesSummary.orders}</span></div>
                 <div className="report-kpi"><span className="report-kpi-label">Average Sale</span><span className="report-kpi-value">{formatCurrency(data.salesSummary.averageSale)}</span></div>
                 <div className="report-kpi"><span className="report-kpi-label">Profit</span><span className="report-kpi-value">{formatCurrency(data.salesSummary.profit)}</span></div>
               </div>
-            </div>
+            </section>
 
             {/* 2. Inventory Summary */}
-            <div className="report-section">
-              <h3>2. Inventory Summary</h3>
+            <section className="report-section report-section--summary">
+              <div className="report-section-heading"><span>02</span><div><h2>Inventory Summary</h2><p>Current stock position and value</p></div></div>
               <div className="report-kpi-grid">
                 <div className="report-kpi"><span className="report-kpi-label">Current Stock</span><span className="report-kpi-value">{data.inventorySummary.currentStock}</span></div>
                 <div className="report-kpi"><span className="report-kpi-label">Low Stock</span><span className="report-kpi-value">{data.inventorySummary.lowStock}</span></div>
                 <div className="report-kpi"><span className="report-kpi-label">Out of Stock</span><span className="report-kpi-value">{data.inventorySummary.outOfStock}</span></div>
                 <div className="report-kpi"><span className="report-kpi-label">Stock Value</span><span className="report-kpi-value">{formatCurrency(data.inventorySummary.stockValue)}</span></div>
               </div>
-            </div>
+            </section>
 
             {/* 3. Product Performance */}
-            <div className="report-section">
-              <h3>3. Product Performance</h3>
+            <section className="report-section report-section--page-start">
+              <div className="report-section-heading"><span>03</span><div><h2>Product Performance</h2><p>Sales velocity and profitability leaders</p></div></div>
               <div className="report-tables-row">
                 <ReportTable
                   caption="Best Selling"
                   headers={['Product', 'Qty']}
                   rows={data.productSummary.bestSelling.map((p) => [p.label, p.quantity])}
+                  numericColumns={[1]}
                 />
                 <ReportTable
                   caption="Slow Moving"
                   headers={['Product', 'Qty']}
                   rows={data.productSummary.slowMoving.map((p) => [p.label, p.quantity])}
+                  numericColumns={[1]}
                 />
                 <ReportTable
                   caption="Most Profitable"
                   headers={['Product', 'Profit']}
                   rows={data.productSummary.mostProfitable.map((p) => [p.label, formatCurrency(p.amount)])}
+                  numericColumns={[1]}
                 />
               </div>
-            </div>
+            </section>
 
             {/* 4. Customer Report */}
-            <div className="report-section">
-              <h3>4. Customer Report</h3>
+            <section className="report-section">
+              <div className="report-section-heading"><span>04</span><div><h2>Customer Report</h2><p>Highest-value customers and unpaid balances</p></div></div>
               <div className="report-tables-row">
                 <ReportTable
                   caption="Top Customers"
                   headers={['Customer', 'Amount']}
                   rows={data.customerSummary.topCustomers.map((c) => [c.label, formatCurrency(c.amount)])}
+                  numericColumns={[1]}
                 />
                 <ReportTable
                   caption="Outstanding Balances"
                   headers={['Customer', 'Balance']}
                   rows={data.customerSummary.outstandingCustomers.map((c) => [c.label, formatCurrency(c.amount)])}
+                  numericColumns={[1]}
                 />
               </div>
-            </div>
+            </section>
 
             {/* 5. Supplier Report */}
-            <div className="report-section">
-              <h3>5. Supplier Report</h3>
+            <section className="report-section">
+              <div className="report-section-heading"><span>05</span><div><h2>Supplier Report</h2><p>Purchase value and outstanding commitments</p></div></div>
               <div className="report-tables-row">
                 <ReportTable
                   caption="Purchases"
                   headers={['Supplier', 'Amount']}
                   rows={data.supplierSummary.purchases.map((s) => [s.label, formatCurrency(s.amount)])}
+                  numericColumns={[1]}
                 />
                 <ReportTable
                   caption="Outstanding Payments"
                   headers={['Supplier', 'Amount']}
                   rows={data.supplierSummary.outstandingPayments.map((s) => [s.label, formatCurrency(s.amount)])}
+                  numericColumns={[1]}
                 />
               </div>
-            </div>
+            </section>
 
             {/* 6. Recent Purchase History */}
-            <div className="report-section">
-              <h3>6. Recent Purchase History</h3>
+            <section className="report-section">
+              <div className="report-section-heading"><span>06</span><div><h2>Recent Purchase History</h2><p>Latest customer transactions in the period</p></div></div>
               <ReportTable
                 headers={['Invoice', 'Customer', 'Date', 'Amount']}
                 rows={data.customerSummary.purchaseHistory.map((s) => [
@@ -445,15 +459,16 @@ export function Reports() {
                   formatDate(s.created_at),
                   formatCurrency(Number(s.total_amount)),
                 ])}
+                numericColumns={[3]}
               />
-            </div>
+            </section>
 
             {/* Footer */}
             <div className="report-footer">
               <p>This report was automatically generated by Shoe Gallery POS.</p>
               <p>Confidential — For internal use only.</p>
             </div>
-          </div>
+          </article>
         </>
       )}
     </div>

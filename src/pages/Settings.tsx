@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Save, Shield } from 'lucide-react';
+import { Download, Printer, Save, Shield } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { Profile, StoreSettings, UserRole } from '../types';
 import * as settingsService from '../services/settingsService';
@@ -16,6 +16,7 @@ import {
 } from '../components/ui';
 import { SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
 import { usePWAInstall } from '../pwa/install';
+import { printReceiptWidthTest } from '../services/receiptPrintService';
 
 interface SettingsFormValues {
   store_name: string;
@@ -29,8 +30,18 @@ interface SettingsFormValues {
   invoice_prefix: string;
   default_low_stock_limit: number;
   receipt_printing: 'ask' | 'automatic' | 'none';
-  receipt_paper_width_mm:58|80; receipt_orientation:'portrait'|'landscape'; receipt_left_padding_mm:number; receipt_right_padding_mm:number; receipt_top_padding_mm:number; receipt_bottom_padding_mm:number; receipt_font_size_px:number; receipt_show_logo:boolean; receipt_show_customer:boolean; receipt_show_barcode:boolean; receipt_show_return_policy:boolean;
-  barcode_label_width_mm:number; barcode_label_height_mm:number; barcode_orientation:'portrait'|'landscape'; barcode_horizontal_offset_mm:number; barcode_vertical_offset_mm:number; barcode_width:number; barcode_height:number; barcode_show_product_name:boolean;
+  receipt_paper_width_mm:58|80; receipt_printable_width_mm:number; receipt_orientation:'portrait'|'landscape'; receipt_left_padding_mm:number; receipt_right_padding_mm:number; receipt_top_padding_mm:number; receipt_bottom_padding_mm:number; receipt_font_size_px:number; receipt_horizontal_offset_mm:number; receipt_show_logo:boolean; receipt_show_customer:boolean; receipt_show_barcode:boolean; receipt_show_return_policy:boolean;
+  barcode_horizontal_offset_mm:number; barcode_vertical_offset_mm:number; barcode_width:number; barcode_height:number;
+}
+
+function normaliseBarcodeWidth(value: number | undefined) {
+  const width = Number(value);
+  return Number.isFinite(width) && width >= 0.8 && width <= 1 ? width : 1;
+}
+
+function normaliseBarcodeHeight(value: number | undefined) {
+  const height = Number(value);
+  return [24, 28, 32, 36, 40].includes(height) ? height : 32;
 }
 
 export function Settings() {
@@ -69,8 +80,20 @@ export function Settings() {
           invoice_prefix: nextSettings.invoice_prefix,
           default_low_stock_limit: nextSettings.default_low_stock_limit,
           receipt_printing: nextSettings.receipt_printing || 'automatic',
-          receipt_paper_width_mm:nextSettings.receipt_paper_width_mm??80,receipt_orientation:nextSettings.receipt_orientation??'landscape',receipt_left_padding_mm:Number(nextSettings.receipt_left_padding_mm??4),receipt_right_padding_mm:Number(nextSettings.receipt_right_padding_mm??4),receipt_top_padding_mm:Number(nextSettings.receipt_top_padding_mm??2),receipt_bottom_padding_mm:Number(nextSettings.receipt_bottom_padding_mm??2),receipt_font_size_px:Number(nextSettings.receipt_font_size_px??11),receipt_show_logo:nextSettings.receipt_show_logo??false,receipt_show_customer:nextSettings.receipt_show_customer??true,receipt_show_barcode:nextSettings.receipt_show_barcode??false,receipt_show_return_policy:nextSettings.receipt_show_return_policy??true,
-          barcode_label_width_mm:Number(nextSettings.barcode_label_width_mm??30),barcode_label_height_mm:Number(nextSettings.barcode_label_height_mm??20),barcode_orientation:nextSettings.barcode_orientation??'portrait',barcode_horizontal_offset_mm:Number(nextSettings.barcode_horizontal_offset_mm??0),barcode_vertical_offset_mm:Number(nextSettings.barcode_vertical_offset_mm??0),barcode_width:Number(nextSettings.barcode_width??1),barcode_height:Number(nextSettings.barcode_height??30),barcode_show_product_name:false,
+          receipt_paper_width_mm: nextSettings.receipt_paper_width_mm ?? 80,
+          receipt_printable_width_mm: Number(nextSettings.receipt_printable_width_mm ?? 72),
+          receipt_orientation: nextSettings.receipt_orientation ?? 'landscape',
+          receipt_left_padding_mm: Number(nextSettings.receipt_left_padding_mm) === 4 && Number(nextSettings.receipt_right_padding_mm) === 4 ? 2 : Number(nextSettings.receipt_left_padding_mm ?? 2),
+          receipt_right_padding_mm: Number(nextSettings.receipt_left_padding_mm) === 4 && Number(nextSettings.receipt_right_padding_mm) === 4 ? 3 : Number(nextSettings.receipt_right_padding_mm ?? 3),
+          receipt_top_padding_mm: Number(nextSettings.receipt_top_padding_mm ?? 2),
+          receipt_bottom_padding_mm: Number(nextSettings.receipt_bottom_padding_mm ?? 2),
+          receipt_font_size_px: Number(nextSettings.receipt_font_size_px) === 11 ? 10 : Number(nextSettings.receipt_font_size_px ?? 10),
+          receipt_horizontal_offset_mm: Number(nextSettings.receipt_horizontal_offset_mm ?? 0),
+          receipt_show_logo: nextSettings.receipt_show_logo ?? false,
+          receipt_show_customer: nextSettings.receipt_show_customer ?? true,
+          receipt_show_barcode: nextSettings.receipt_show_barcode ?? false,
+          receipt_show_return_policy: nextSettings.receipt_show_return_policy ?? true,
+          barcode_horizontal_offset_mm:Number(nextSettings.barcode_horizontal_offset_mm??0),barcode_vertical_offset_mm:Number(nextSettings.barcode_vertical_offset_mm??0),barcode_width:normaliseBarcodeWidth(nextSettings.barcode_width),barcode_height:normaliseBarcodeHeight(nextSettings.barcode_height),
         });
       }
     }
@@ -97,8 +120,20 @@ export function Settings() {
       invoice_prefix: values.invoice_prefix,
       default_low_stock_limit: Number(values.default_low_stock_limit),
       receipt_printing: values.receipt_printing,
-      receipt_paper_width_mm:Number(values.receipt_paper_width_mm) as 58|80,receipt_orientation:values.receipt_orientation,receipt_left_padding_mm:Number(values.receipt_left_padding_mm),receipt_right_padding_mm:Number(values.receipt_right_padding_mm),receipt_top_padding_mm:Number(values.receipt_top_padding_mm),receipt_bottom_padding_mm:Number(values.receipt_bottom_padding_mm),receipt_font_size_px:Number(values.receipt_font_size_px),receipt_show_logo:Boolean(values.receipt_show_logo),receipt_show_customer:Boolean(values.receipt_show_customer),receipt_show_barcode:Boolean(values.receipt_show_barcode),receipt_show_return_policy:Boolean(values.receipt_show_return_policy),
-      barcode_label_width_mm:Number(values.barcode_label_width_mm),barcode_label_height_mm:Number(values.barcode_label_height_mm),barcode_orientation:values.barcode_orientation,barcode_horizontal_offset_mm:Number(values.barcode_horizontal_offset_mm),barcode_vertical_offset_mm:Number(values.barcode_vertical_offset_mm),barcode_width:Number(values.barcode_width),barcode_height:Number(values.barcode_height),barcode_show_product_name:Boolean(values.barcode_show_product_name),
+      receipt_paper_width_mm: Number(values.receipt_paper_width_mm) as 58 | 80,
+      receipt_printable_width_mm: Number(values.receipt_printable_width_mm),
+      receipt_orientation: values.receipt_orientation,
+      receipt_left_padding_mm: Number(values.receipt_left_padding_mm),
+      receipt_right_padding_mm: Number(values.receipt_right_padding_mm),
+      receipt_top_padding_mm: Number(values.receipt_top_padding_mm),
+      receipt_bottom_padding_mm: Number(values.receipt_bottom_padding_mm),
+      receipt_font_size_px: Number(values.receipt_font_size_px),
+      receipt_horizontal_offset_mm: Number(values.receipt_horizontal_offset_mm),
+      receipt_show_logo: Boolean(values.receipt_show_logo),
+      receipt_show_customer: Boolean(values.receipt_show_customer),
+      receipt_show_barcode: Boolean(values.receipt_show_barcode),
+      receipt_show_return_policy: Boolean(values.receipt_show_return_policy),
+      barcode_horizontal_offset_mm:Number(values.barcode_horizontal_offset_mm),barcode_vertical_offset_mm:Number(values.barcode_vertical_offset_mm),barcode_width:Number(values.barcode_width),barcode_height:Number(values.barcode_height),
     });
 
     if (updateError) {
@@ -108,6 +143,16 @@ export function Settings() {
 
     setSettings(data as StoreSettings);
     setSuccess('Settings updated successfully.');
+  };
+
+  const handleReceiptWidthTest = () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      printReceiptWidthTest();
+    } catch (printError) {
+      setError(getErrorMessage(printError, 'Unable to open receipt width test.'));
+    }
   };
 
   const handleRoleChange = async (userId: string, role: UserRole) => {
@@ -175,12 +220,137 @@ export function Settings() {
                 <Input type="number" step="0.01" label="Tax Percentage" {...register('tax_percentage', { valueAsNumber: true })} />
                 <Input label="Invoice Prefix" {...register('invoice_prefix', { required: 'Invoice prefix is required' })} />
                 <Input type="number" label="Default Low Stock Limit" {...register('default_low_stock_limit', { valueAsNumber: true })} />
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 pt-6">
+              <h3 className="text-lg font-semibold text-dashboard-text-primary">Receipt Printer</h3>
+              <p className="mt-1 text-sm text-dashboard-text-sub">
+                Safe thermal-receipt width and edge calibration for the printer driver.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <Select label="Receipt Printing" {...register('receipt_printing')}>
-                  <option value="automatic">Automatically Open Print Dialog</option><option value="ask">Ask Before Printing</option><option value="none">Do Not Print</option>
+                  <option value="automatic">Automatically Open Print Dialog</option>
+                  <option value="ask">Ask Before Printing</option>
+                  <option value="none">Do Not Print</option>
                 </Select>
-                <Select label="Receipt Paper Width" {...register('receipt_paper_width_mm',{valueAsNumber:true})}><option value="58">58mm</option><option value="80">80mm</option></Select><Select label="Orientation" {...register('receipt_orientation')}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></Select>
-                <Input type="number" step="0.5" label="Receipt Font Size (px)" {...register('receipt_font_size_px',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Left Padding (mm)" {...register('receipt_left_padding_mm',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Right Padding (mm)" {...register('receipt_right_padding_mm',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Top Padding (mm)" {...register('receipt_top_padding_mm',{valueAsNumber:true})}/><Input type="number" step="0.5" label="Bottom Padding (mm)" {...register('receipt_bottom_padding_mm',{valueAsNumber:true})}/>
-                <label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_logo')}/> Show store logo</label><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_customer')}/> Show customer</label><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_barcode')}/> Show barcode</label><label className="flex items-center gap-3 text-sm text-dashboard-text-label"><input type="checkbox" {...register('receipt_show_return_policy')}/> Show return policy</label>
+                <Select
+                  label="Paper Width"
+                  {...register('receipt_paper_width_mm', { valueAsNumber: true })}
+                >
+                  <option value="58">58mm</option>
+                  <option value="80">80mm</option>
+                </Select>
+                <Input
+                  type="number"
+                  min="48"
+                  max="76"
+                  step="1"
+                  required
+                  label="Printable Width (mm)"
+                  {...register('receipt_printable_width_mm', { valueAsNumber: true })}
+                />
+                <Select label="Orientation" {...register('receipt_orientation')}>
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </Select>
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  required
+                  label="Left Padding (mm)"
+                  {...register('receipt_left_padding_mm', { valueAsNumber: true })}
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  required
+                  label="Right Padding (mm)"
+                  {...register('receipt_right_padding_mm', { valueAsNumber: true })}
+                />
+                <Input
+                  type="number"
+                  min="-5"
+                  max="5"
+                  step="0.5"
+                  required
+                  label="Horizontal Offset (mm)"
+                  {...register('receipt_horizontal_offset_mm', { valueAsNumber: true })}
+                />
+                <Input
+                  type="number"
+                  min="8"
+                  max="14"
+                  step="0.5"
+                  required
+                  label="Receipt Font Size (px)"
+                  {...register('receipt_font_size_px', { valueAsNumber: true })}
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  required
+                  label="Top Padding (mm)"
+                  {...register('receipt_top_padding_mm', { valueAsNumber: true })}
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.5"
+                  required
+                  label="Bottom Padding (mm)"
+                  {...register('receipt_bottom_padding_mm', { valueAsNumber: true })}
+                />
+                <label className="flex items-center gap-3 text-sm text-dashboard-text-label">
+                  <input type="checkbox" {...register('receipt_show_logo')} /> Show store logo
+                </label>
+                <label className="flex items-center gap-3 text-sm text-dashboard-text-label">
+                  <input type="checkbox" {...register('receipt_show_customer')} /> Show customer
+                </label>
+                <label className="flex items-center gap-3 text-sm text-dashboard-text-label">
+                  <input type="checkbox" {...register('receipt_show_barcode')} /> Show barcode
+                </label>
+                <label className="flex items-center gap-3 text-sm text-dashboard-text-label">
+                  <input type="checkbox" {...register('receipt_show_return_policy')} /> Show return policy
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button type="button" variant="secondary" onClick={handleReceiptWidthTest}>
+                  <Printer size={16} />
+                  Print Width Test
+                </Button>
+                <p className="text-xs text-dashboard-text-sub">
+                  Calibration only: prints 68, 70, 72, 74, and 76mm boundary lines, not a sale.
+                </p>
+              </div>
+              <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub">
+                For an 80mm roll, start with 72mm printable width, 2mm left padding, 3mm right padding,
+                and 0mm horizontal offset. Print at 100% scale with zero/minimum driver margins.
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 pt-6">
+              <h3 className="text-lg font-semibold text-dashboard-text-primary">Barcode Printer</h3>
+              <p className="mt-1 text-sm text-dashboard-text-sub">30mm × 20mm labels with barcode and number only.</p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Input type="number" label="Label Width (mm)" value={30} readOnly/>
+                <Input type="number" label="Label Height (mm)" value={20} readOnly/>
+                <Input type="number" min="-3" max="3" step="0.1" required label="Horizontal Offset (mm)" {...register('barcode_horizontal_offset_mm',{valueAsNumber:true})}/>
+                <Input type="number" min="-3" max="3" step="0.1" required label="Vertical Offset (mm)" {...register('barcode_vertical_offset_mm',{valueAsNumber:true})}/>
+                <Input type="number" min="0.8" max="1" step="0.05" required label="Barcode Width" {...register('barcode_width',{valueAsNumber:true})}/>
+                <Input type="number" min="24" max="40" step="4" required label="Barcode Height" {...register('barcode_height',{valueAsNumber:true})}/>
+              </div>
+              <p className="mt-3 text-xs text-dashboard-text-sub">Label dimensions are fixed. Barcode width, barcode height, and offset calibration apply only within the 30mm × 20mm label.</p>
+              <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub">
+                <strong className="text-dashboard-text-primary">Select 30mm × 20mm in the printer driver for correct label printing.</strong>{' '}
+                Use 100% scale and 0/minimum margins. Save as PDF is for visual testing only and does not confirm the physical label size.
               </div>
             </div>
 
@@ -190,7 +360,6 @@ export function Settings() {
                 {isSubmitting ? 'Saving...' : 'Save Settings'}
               </Button>
             </div>
-            <div className="border-t border-white/10 pt-6"><h3 className="text-lg font-semibold text-dashboard-text-primary">Barcode Printer</h3><p className="mt-1 text-sm text-dashboard-text-sub">30mm × 20mm labels with barcode and number only.</p><div className="mt-4 grid gap-4 md:grid-cols-2"><Input type="number" step="0.1" label="Label Width (mm)" {...register('barcode_label_width_mm',{valueAsNumber:true})}/><Input type="number" step="0.1" label="Label Height (mm)" {...register('barcode_label_height_mm',{valueAsNumber:true})}/><Select label="Orientation" {...register('barcode_orientation')}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></Select><Input type="number" step="0.1" label="Horizontal Offset (mm)" {...register('barcode_horizontal_offset_mm',{valueAsNumber:true})}/><Input type="number" step="0.1" label="Vertical Offset (mm)" {...register('barcode_vertical_offset_mm',{valueAsNumber:true})}/><Input type="number" step="0.05" label="Barcode Width" {...register('barcode_width',{valueAsNumber:true})}/><Input type="number" step="1" label="Barcode Height" {...register('barcode_height',{valueAsNumber:true})}/></div><div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub"><strong className="text-dashboard-text-primary">Windows setup required:</strong> Settings → Printers &amp; Scanners → barcode printer → Printer Preferences. Create/select 30mm × 20mm paper, Portrait orientation, 0/minimum margins, and 100% scaling.</div></div>
           </div>
         </form>
 

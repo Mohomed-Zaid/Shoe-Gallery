@@ -3,14 +3,19 @@ import { Ban, Eye, Printer, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { SaleWithRelations } from '../services/salesService';
 import * as salesService from '../services/salesService';
+import * as settingsService from '../services/settingsService';
+import type { StoreSettings } from '../types';
 import { Alert, DataTable, Input, LoadingSpinner, PageHeader } from '../components/ui';
+import { ThermalReceipt } from '../components/receipt/ThermalReceipt';
 import { useAuth } from '../context/AuthContext';
+import { printReceipt } from '../services/receiptPrintService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency, formatDate } from '../utils/format';
 
 export function Sales() {
   const { profile } = useAuth();
   const [sales, setSales] = useState<SaleWithRelations[]>([]);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,11 +23,19 @@ export function Sales() {
   const fetchSales = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: fetchError } = await salesService.getSales();
-    if (fetchError) {
-      setError(getErrorMessage(fetchError));
+    const [salesResult, settingsResult] = await Promise.all([
+      salesService.getSales(),
+      settingsService.getStoreSettings(),
+    ]);
+    if (salesResult.error) {
+      setError(getErrorMessage(salesResult.error));
     } else {
-      setSales((data as SaleWithRelations[]) ?? []);
+      setSales((salesResult.data as SaleWithRelations[]) ?? []);
+    }
+    if (settingsResult.error) {
+      setError(getErrorMessage(settingsResult.error));
+    } else {
+      setSettings(settingsResult.data as StoreSettings | null);
     }
     setLoading(false);
   }, []);
@@ -48,6 +61,23 @@ export function Sales() {
       fetchSales();
     } catch (err) {
       setError(getErrorMessage(err));
+    }
+  };
+
+  const handlePrint = (sale: SaleWithRelations) => {
+    try {
+      printReceipt(
+        <ThermalReceipt
+          sale={sale}
+          items={sale.sale_items ?? []}
+          payments={sale.sale_payments ?? []}
+          customer={sale.customer}
+          store={settings}
+        />,
+        { orientation: settings?.receipt_orientation ?? 'landscape' },
+      );
+    } catch (printError) {
+      setError(getErrorMessage(printError, 'Unable to open receipt print window.'));
     }
   };
 
@@ -103,8 +133,9 @@ export function Sales() {
                   </Link>
                   <button
                     type="button"
+                    title="Print receipt"
                     className="text-dashboard-text-sub hover:text-dashboard-text-primary"
-                    onClick={() => window.open(`/sales/${sale.id}?print=1`, '_blank', 'noopener,noreferrer')}
+                    onClick={() => handlePrint(sale)}
                   >
                     <Printer size={18} />
                   </button>

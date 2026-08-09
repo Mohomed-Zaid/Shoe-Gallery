@@ -670,7 +670,7 @@
   }
 
   /* ── A4 Reports PDF ── */
-  .report-print-area {
+  .business-report-print-area {
     display: block !important;
     position: relative;
     width: 100%;
@@ -678,53 +678,118 @@
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   }
 
-  .report-print-area * {
+  .business-report-print-area * {
     color: #1e293b !important;
+    box-sizing: border-box;
   }
 
   /* ── Report header ── */
-  .report-header {
-    text-align: center;
-    border-bottom: 2px solid #0f172a;
-    padding-bottom: 12pt;
-    margin-bottom: 16pt;
+  .business-report-print-area .report-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18pt;
+    text-align: left;
+    border-bottom: 2.5pt solid #0f172a;
+    padding: 0 0 12pt;
+    margin: 0 0 18pt;
   }
 
-  .report-header h1 {
-    font-size: 20pt;
+  .business-report-print-area .report-header h1 {
+    font-size: 21pt;
     font-weight: 800;
     color: #0f172a !important;
     margin: 0;
     letter-spacing: -0.02em;
   }
 
-  .report-header h2 {
-    font-size: 13pt;
-    font-weight: 600;
-    color: #334155 !important;
-    margin: 4pt 0 0;
+  .report-eyebrow {
+    margin: 0 0 3pt;
+    color: #2563eb !important;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
   }
 
-  .report-meta {
-    font-size: 8.5pt;
+  .report-subtitle {
+    margin: 4pt 0 0;
     color: #64748b !important;
-    margin-top: 8pt;
+    font-size: 8.5pt;
+  }
+
+  .report-meta-grid {
+    display: grid;
+    min-width: 175pt;
+    margin: 0;
+    gap: 5pt;
+    font-size: 8.5pt;
+  }
+
+  .report-meta-grid div {
+    display: grid;
+    grid-template-columns: 70pt 1fr;
+    gap: 8pt;
+  }
+
+  .report-meta-grid dt { color: #64748b !important; }
+
+  .report-meta-grid dd {
+    margin: 0;
+    color: #0f172a !important;
+    font-weight: 600;
+    text-align: right;
   }
 
   /* ── Sections ── */
-  .report-section {
-    margin-bottom: 18pt;
-    page-break-inside: avoid;
-    break-inside: avoid;
+  .business-report-print-area .report-section {
+    margin-bottom: 20pt;
   }
 
-  .report-section h3 {
-    font-size: 12pt;
-    font-weight: 700;
-    color: #0f172a !important;
+  .report-section--summary,
+  .report-tables-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-section--page-start {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .report-section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 8pt;
     border-bottom: 1px solid #cbd5e1;
-    padding-bottom: 4pt;
+    padding-bottom: 6pt;
     margin: 0 0 10pt;
+  }
+
+  .report-section-heading > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20pt;
+    height: 20pt;
+    border-radius: 4pt;
+    background: #0f172a !important;
+    color: #ffffff !important;
+    font-size: 7.5pt;
+    font-weight: 800;
+  }
+
+  .report-section-heading h2 {
+    margin: 0;
+    color: #0f172a !important;
+    font-size: 11.5pt;
+    line-height: 1.1;
+  }
+
+  .report-section-heading p {
+    margin: 2pt 0 0;
+    color: #64748b !important;
+    font-size: 7.5pt;
   }
 
   /* ── KPI grid ── */
@@ -766,6 +831,15 @@
     margin-bottom: 8pt;
   }
 
+  .report-table thead {
+    display: table-header-group;
+  }
+
+  .report-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .report-table caption {
     text-align: left;
     font-weight: 700;
@@ -798,6 +872,12 @@
 
   .report-table tbody tr:last-child td {
     border-bottom: none;
+  }
+
+  .report-table .report-number {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   /* ── Side-by-side tables ── */

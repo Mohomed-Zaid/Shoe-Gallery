@@ -1,0 +1,53 @@
+.barcode-label {
+  width: 30mm;
+  height: 20mm;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 1mm;
+  background: white;
+  color: black;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.barcode-svg {
+  width: 26mm;
+  max-width: 26mm;
+  height: auto;
+  display: block;
+}
+
+.barcode-number {
+  margin-top: 0.5mm;
+  font-size: 7px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.barcode-label-preview {
+  width: min(100%, 90mm);
+  aspect-ratio: 3 / 2;
+  margin-inline: auto;
+  overflow: hidden;
+  background: white;
+}
+
+.barcode-label-preview .barcode-label {
+  width: 100%;
+  height: 100%;
+  padding: 3.333%;
+}
+
+.barcode-label-preview .barcode-svg {
+  width: 86.667%;
+  max-width: 86.667%;
+}
+
+.barcode-label-preview .barcode-number {
+  margin-top: 1.667%;
+  font-size: 21px;
+}
