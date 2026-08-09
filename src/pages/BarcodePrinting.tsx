@@ -165,6 +165,7 @@ export function BarcodePrinting() {
         copies,
         storeName: printerSettings?.store_name || 'SHOE GALLERY',
         itemNumber: selectedVariant.product?.item_number || selectedVariant.product?.code,
+        sellingPrice: Number(selectedVariant.selling_price),
         density: getBarcodePrintDensity(),
         barcodeWidth: Number(printerSettings?.barcode_width ?? DEFAULT_BARCODE_WIDTH),
         barcodeHeight: Number(printerSettings?.barcode_height ?? DEFAULT_BARCODE_HEIGHT),
@@ -320,12 +321,13 @@ export function BarcodePrinting() {
           does not support 30mm × 20mm; it does not prove the physical label size is wrong.
         </p>
         <div className="mt-4 rounded-3xl border border-dashed border-white/15 bg-white p-6">
-          {validatedBarcode === selectedBarcode && selectedBarcode ? (
+          {validatedBarcode === selectedBarcode && selectedBarcode && selectedVariant ? (
             <div className="barcode-label-preview">
               <BarcodeLabel
                 barcodeNumber={selectedBarcode}
                 itemNumber={selectedVariant?.product?.item_number || selectedVariant?.product?.code}
                 storeName={printerSettings?.store_name || 'SHOE GALLERY'}
+                sellingPrice={Number(selectedVariant.selling_price)}
               />
             </div>
           ) : (
