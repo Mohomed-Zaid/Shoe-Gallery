@@ -21,6 +21,8 @@ export default defineConfig({
     workbox: {
       globPatterns: ['**/*.{js,css,html,woff2,png,jpg,jpeg,svg,ico}'],
       navigateFallback: '/index.html',
+      cleanupOutdatedCaches: true,
+      navigateFallbackDenylist: [/^\/assets\//, /\.[^/]+$/],
       runtimeCaching: [
         { urlPattern: /^https:\/\/.*\.supabase\.co\//i, handler: 'NetworkOnly' },
         { urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//i, handler: 'StaleWhileRevalidate', options: { cacheName: 'google-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 } } },
