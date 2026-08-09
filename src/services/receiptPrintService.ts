@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import receiptCss from '../styles/thermal-receipt.css?raw';
+import { getReceiptPrintStyle } from './receiptPrintStyle';
 
 interface ReceiptPrintOptions {
   orientation?: 'portrait' | 'landscape';
@@ -29,6 +30,7 @@ export function printReceipt(
 ) {
   const printWindow = window.open('', 'thermal-receipt-print', getPrintWindowFeatures());
   if (!printWindow) throw new Error('Pop-up blocked. Allow pop-ups to print the receipt.');
+  const printStyle = getReceiptPrintStyle();
 
   const documentCss = `
     @page { margin: 0; }
@@ -58,20 +60,108 @@ export function printReceipt(
       position: static !important;
       width: var(--receipt-printable-width, 72mm) !important;
       max-width: var(--receipt-printable-width, 72mm) !important;
-      margin: 0 !important;
+      margin: 0 0 0 var(--receipt-horizontal-offset, 0mm) !important;
       padding: var(--receipt-top-padding, 2mm) var(--receipt-right-padding, 3mm)
-        var(--receipt-bottom-padding, 2mm) var(--receipt-left-padding, 2mm) !important;
+        1mm var(--receipt-left-padding, 2mm) !important;
       overflow: hidden !important;
-      transform: translateX(var(--receipt-horizontal-offset, 0mm));
-      transform-origin: top left;
+      background: #fff !important;
+      color: #000 !important;
+      opacity: 1 !important;
+      text-shadow: none !important;
       box-shadow: none !important;
+      filter: none !important;
+      transform: none !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .receipt-footer {
+      margin-bottom: 2mm !important;
     }
   `;
 
   printWindow.document.open();
   printWindow.document.write(
-    `<!doctype html><html data-receipt-orientation="${orientation}"><head><meta charset="utf-8"><title>Receipt</title><style>${receiptCss}\n${documentCss}</style></head><body>${renderToStaticMarkup(receipt)}</body></html>`,
+    `<!doctype html><html data-receipt-orientation="${orientation}"><head><meta charset="utf-8"><title>Receipt</title><style>${receiptCss}\n${documentCss}</style></head><body class="receipt-document-${printStyle}">${renderToStaticMarkup(receipt)}</body></html>`,
   );
+  printWindow.document.close();
+  completePrint(printWindow);
+}
+
+export function printReceiptQualityTest() {
+  const printWindow = window.open('', 'thermal-receipt-quality-test', getPrintWindowFeatures());
+  if (!printWindow) throw new Error('Pop-up blocked. Allow pop-ups to print the quality test.');
+
+  const testLines = `
+    <p>NORMAL TEXT</p>
+    <p class="bold">BOLD TEXT</p>
+    <p class="extra-bold">EXTRA BOLD TEXT</p>
+    <p>1234567890</p>
+    <p>LKR 1,500.00</p>
+    <p>LKR 25,000.00</p>
+    <p>ABCDEFGHIJKLMNOPQRSTUVWXYZ</p>
+  `;
+  const styles = [
+    { name: 'NORMAL', className: 'normal' },
+    { name: 'DARK', className: 'dark' },
+    { name: 'EXTRA DARK', className: 'extra-dark' },
+  ];
+  const tests = styles.map(({ name, className }) => `
+    <section class="quality-test quality-test--${className}">
+      <h2>${name}</h2>
+      ${testLines}
+    </section>
+  `).join('');
+
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Receipt Print Quality Test</title>
+        <style>
+          @page { margin: 0; }
+          html, body {
+            width: auto;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible;
+            background: #fff !important;
+          }
+          body {
+            width: 68mm;
+            padding: 2mm 2mm 1mm !important;
+            color: #000 !important;
+            font-family: Arial, Helvetica, "Arial Black", sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+            color: #000 !important;
+            opacity: 1 !important;
+            text-shadow: none !important;
+            box-shadow: none !important;
+            filter: none !important;
+          }
+          h1 { margin: 0 0 2mm; text-align: center; font-size: 16px; font-weight: 900; }
+          h2 { margin: 0 0 1mm; font-size: 14px; font-weight: 900; }
+          p { margin: 0.6mm 0; overflow-wrap: anywhere; }
+          .quality-test { padding: 2mm 0; border-top: 1px dashed #000; break-inside: avoid; }
+          .quality-test--normal { font-size: 11px; font-weight: 500; }
+          .quality-test--dark { font-size: 11px; font-weight: 600; }
+          .quality-test--extra-dark { font-size: 12px; font-weight: 700; }
+          .bold { font-weight: 700; }
+          .extra-bold { font-weight: 900; }
+        </style>
+      </head>
+      <body>
+        <h1>PRINT QUALITY TEST</h1>
+        ${tests}
+      </body>
+    </html>`);
   printWindow.document.close();
   completePrint(printWindow);
 }

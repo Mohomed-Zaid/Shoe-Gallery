@@ -7,13 +7,32 @@ export interface BarcodeLabelPrintOptions {
   verticalOffsetMm?: number;
   barcodeWidth?: number;
   barcodeHeight?: number;
+  itemNumber?: string;
+  storeName?: string;
+  density?: BarcodePrintDensity;
+}
+
+export type BarcodePrintDensity = 'normal' | 'dark' | 'extra-dark';
+
+interface BarcodeGenerationOptions {
+  density?: BarcodePrintDensity;
+  height?: number;
+  widthScale?: number;
 }
 
 const BARCODE_GENERATION_ERROR = 'Barcode could not be generated.';
 const PRINT_WINDOW_ERROR = 'Unable to open barcode print window.';
-const DEFAULT_BARCODE_HEIGHT = 32;
+const DEFAULT_BARCODE_HEIGHT = 36;
 const DEFAULT_BARCODE_WIDTH_SCALE = 1;
 const BARCODE_HEIGHT_OPTIONS: readonly number[] = [24, 28, 32, 36, 40];
+const BARCODE_DENSITY_KEY = 'shoe-gallery-barcode-print-density';
+const BARCODE_MAX_WIDTH_PX = 104;
+const BARCODE_MIN_WIDTH_PX = 83;
+const DENSITY_BAR_WIDTH: Record<BarcodePrintDensity, number> = {
+  normal: 1.3,
+  dark: 1.5,
+  'extra-dark': 1.6,
+};
 let activePrintWindow: Window | null = null;
 
 function finiteNumber(value: number | undefined, fallback: number) {
@@ -70,8 +89,55 @@ function normaliseBarcodeHeight(value: number | undefined) {
   return BARCODE_HEIGHT_OPTIONS.includes(height) ? height : DEFAULT_BARCODE_HEIGHT;
 }
 
-function generateBarcodeSvg(barcodeNumber: string, height = DEFAULT_BARCODE_HEIGHT) {
-  const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+function isBarcodePrintDensity(value: string | null): value is BarcodePrintDensity {
+  return value === 'normal' || value === 'dark' || value === 'extra-dark';
+}
+
+export function getBarcodePrintDensity(): BarcodePrintDensity {
+  try {
+    const savedDensity = window.localStorage.getItem(BARCODE_DENSITY_KEY);
+    return isBarcodePrintDensity(savedDensity) ? savedDensity : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+export function setBarcodePrintDensity(density: BarcodePrintDensity) {
+  try {
+    window.localStorage.setItem(BARCODE_DENSITY_KEY, density);
+  } catch {
+    // Printing still works with the default when browser storage is unavailable.
+  }
+}
+
+export function generateBarcode(
+  svgElement: SVGSVGElement,
+  barcodeNumber: string,
+  options: BarcodeGenerationOptions = {},
+) {
+  const density = options.density ?? 'dark';
+  const height = normaliseBarcodeHeight(options.height);
+  const widthScale = normaliseBarcodeWidthScale(options.widthScale);
+  const preferredBarWidth = DENSITY_BAR_WIDTH[density];
+
+  // Measure CODE128 at one unit, then generate it directly at the final physical width.
+  // This avoids producing a large SVG and shrinking away thin thermal-printer bars in CSS.
+  svgElement.innerHTML = '';
+  JsBarcode(svgElement, barcodeNumber, {
+    format: 'CODE128',
+    displayValue: false,
+    margin: 0,
+    background: '#ffffff',
+    lineColor: '#000000',
+    width: 1,
+    height,
+  });
+  const unitWidth = Number(svgElement.getAttribute('width'));
+  const targetWidth = BARCODE_MIN_WIDTH_PX +
+    (BARCODE_MAX_WIDTH_PX - BARCODE_MIN_WIDTH_PX) * widthScale;
+  const fittedBarWidth = Number.isFinite(unitWidth) && unitWidth > 0
+    ? Math.min(preferredBarWidth, targetWidth / unitWidth)
+    : preferredBarWidth;
 
   try {
     JsBarcode(svgElement, barcodeNumber, {
@@ -79,7 +145,9 @@ function generateBarcodeSvg(barcodeNumber: string, height = DEFAULT_BARCODE_HEIG
       displayValue: false,
       margin: 0,
       height,
-      width: 1,
+      background: '#ffffff',
+      lineColor: '#000000',
+      width: fittedBarWidth,
     });
   } catch (error) {
     console.error('Barcode generation failed:', error);
@@ -90,8 +158,25 @@ function generateBarcodeSvg(barcodeNumber: string, height = DEFAULT_BARCODE_HEIG
     throw new Error(BARCODE_GENERATION_ERROR);
   }
 
+  if (import.meta.env.DEV) {
+    const barRectangles = Array.from(svgElement.querySelectorAll<SVGRectElement>('g rect'));
+    console.debug('Barcode SVG geometry', {
+      width: svgElement.getAttribute('width'),
+      height: svgElement.getAttribute('height'),
+      viewBox: svgElement.getAttribute('viewBox'),
+      barCount: barRectangles.length,
+      sampleBarWidths: barRectangles.slice(0, 8).map((rect) => rect.getAttribute('width')),
+    });
+  }
+
   svgElement.classList.add('barcode-svg');
   svgElement.setAttribute('aria-hidden', 'true');
+  svgElement.setAttribute('shape-rendering', 'crispEdges');
+}
+
+function generateBarcodeSvg(barcodeNumber: string, options: BarcodeGenerationOptions = {}) {
+  const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  generateBarcode(svgElement, barcodeNumber, options);
   return svgElement.outerHTML;
 }
 
@@ -147,7 +232,11 @@ export async function printBarcodeLabels(
 
   let svgMarkup: string;
   try {
-    svgMarkup = generateBarcodeSvg(value, normaliseBarcodeHeight(options.barcodeHeight));
+    svgMarkup = generateBarcodeSvg(value, {
+      density: options.density ?? getBarcodePrintDensity(),
+      height: options.barcodeHeight,
+      widthScale: options.barcodeWidth,
+    });
   } catch (error) {
     closeWindow(printWindow);
     if (error instanceof Error && error.message === BARCODE_GENERATION_ERROR) throw error;
@@ -156,14 +245,16 @@ export async function printBarcodeLabels(
 
   const copies = normaliseCopies(options.copies);
   const escapedNumber = escapeHtml(value);
+  const escapedItemNumber = escapeHtml(options.itemNumber?.trim() || value);
+  const escapedStoreName = escapeHtml(options.storeName?.trim() || 'SHOE GALLERY');
+  const density = options.density ?? getBarcodePrintDensity();
   const labels = Array.from(
     { length: copies },
     () =>
-      `<section class="barcode-page"><div class="barcode-label">${svgMarkup}<div class="barcode-number">${escapedNumber}</div></div></section>`,
+      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-store-name">${escapedStoreName}</div><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-item-number">${escapedItemNumber} - EACH</div><div class="barcode-number">${escapedNumber}</div></div></section>`,
   ).join('');
   const horizontalOffset = boundedNumber(options.horizontalOffsetMm, 0, -3, 3);
   const verticalOffset = boundedNumber(options.verticalOffsetMm, 0, -3, 3);
-  const barcodeWidthMm = 26 * normaliseBarcodeWidthScale(options.barcodeWidth);
   const popupCss = `
     @page {
       size: 30mm 20mm;
@@ -202,11 +293,6 @@ export async function printBarcodeLabels(
     .barcode-page .barcode-label {
       transform: translate(${horizontalOffset}mm, ${verticalOffset}mm);
       transform-origin: top left;
-    }
-
-    .barcode-page .barcode-svg {
-      width: ${barcodeWidthMm}mm;
-      max-width: 26mm;
     }
 
     .print-controls {

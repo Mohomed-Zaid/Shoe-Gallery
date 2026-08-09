@@ -3,7 +3,11 @@ import { Printer, Search } from 'lucide-react';
 import { BarcodeLabel } from '../components/barcode/BarcodeLabel';
 import { Alert, Button, Input, LoadingSpinner, PageHeader } from '../components/ui';
 import * as productService from '../services/productService';
-import { printBarcodeLabels, validateBarcodeNumber } from '../services/barcodeLabelPrintService';
+import {
+  getBarcodePrintDensity,
+  printBarcodeLabels,
+  validateBarcodeNumber,
+} from '../services/barcodeLabelPrintService';
 import { getStoreSettings } from '../services/settingsService';
 import type { ProductVariant, StoreSettings } from '../types';
 
@@ -11,11 +15,13 @@ interface VariantWithProduct extends ProductVariant {
   product: {
     id: string;
     name: string;
+    code: string;
+    item_number?: string;
   } | null;
 }
 
 const DEFAULT_BARCODE_WIDTH = 1;
-const DEFAULT_BARCODE_HEIGHT = 32;
+const DEFAULT_BARCODE_HEIGHT = 36;
 
 function getPrintErrorMessage(error: unknown) {
   return error instanceof Error
@@ -157,6 +163,9 @@ export function BarcodePrinting() {
     try {
       const printResult = printBarcodeLabels(selectedBarcode, {
         copies,
+        storeName: printerSettings?.store_name || 'SHOE GALLERY',
+        itemNumber: selectedVariant.product?.item_number || selectedVariant.product?.code,
+        density: getBarcodePrintDensity(),
         barcodeWidth: Number(printerSettings?.barcode_width ?? DEFAULT_BARCODE_WIDTH),
         barcodeHeight: Number(printerSettings?.barcode_height ?? DEFAULT_BARCODE_HEIGHT),
         horizontalOffsetMm: Number(printerSettings?.barcode_horizontal_offset_mm ?? 0),
@@ -313,7 +322,11 @@ export function BarcodePrinting() {
         <div className="mt-4 rounded-3xl border border-dashed border-white/15 bg-white p-6">
           {validatedBarcode === selectedBarcode && selectedBarcode ? (
             <div className="barcode-label-preview">
-              <BarcodeLabel barcodeNumber={selectedBarcode} />
+              <BarcodeLabel
+                barcodeNumber={selectedBarcode}
+                itemNumber={selectedVariant?.product?.item_number || selectedVariant?.product?.code}
+                storeName={printerSettings?.store_name || 'SHOE GALLERY'}
+              />
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">

@@ -5,6 +5,7 @@ import { ReceiptItems } from './ReceiptItems';
 import { ReceiptPayments } from './ReceiptPayments';
 import { ReceiptTotals } from './ReceiptTotals';
 import type { ReceiptProps } from './types';
+import { getReceiptPrintStyle } from '../../services/receiptPrintStyle';
 
 function boundedNumber(value: number | undefined, fallback: number, minimum: number, maximum: number) {
   const numericValue = Number(value);
@@ -28,20 +29,19 @@ export function ThermalReceipt({ sale, items, payments, customer, store }: Recei
   const storedLeftPadding = Number(store?.receipt_left_padding_mm);
   const storedRightPadding = Number(store?.receipt_right_padding_mm);
   const usesLegacyPadding = storedLeftPadding === 4 && storedRightPadding === 4;
-  const storedFontSize = Number(store?.receipt_font_size_px);
   const style = {
     '--receipt-printable-width': `${printableWidth(paperWidth, store?.receipt_printable_width_mm)}mm`,
     '--receipt-left-padding': `${usesLegacyPadding ? 2 : boundedNumber(store?.receipt_left_padding_mm, 2, 0, 10)}mm`,
     '--receipt-right-padding': `${usesLegacyPadding ? 3 : boundedNumber(store?.receipt_right_padding_mm, 3, 0, 10)}mm`,
     '--receipt-top-padding': `${boundedNumber(store?.receipt_top_padding_mm, 2, 0, 10)}mm`,
-    '--receipt-bottom-padding': `${boundedNumber(store?.receipt_bottom_padding_mm, 2, 0, 10)}mm`,
-    '--receipt-font-size': `${storedFontSize === 11 ? 10 : boundedNumber(store?.receipt_font_size_px, 10, 8, 14)}px`,
+    '--receipt-bottom-padding': `${boundedNumber(store?.receipt_bottom_padding_mm, 1, 0, 3)}mm`,
+    '--receipt-font-size': `${boundedNumber(store?.receipt_font_size_px, 11, 11, 14)}px`,
     '--receipt-horizontal-offset': `${boundedNumber(store?.receipt_horizontal_offset_mm, 0, -5, 5)}mm`,
   } as CSSProperties;
 
   return (
     <div
-      className={`thermal-receipt thermal-receipt--${paperWidth}`}
+      className={`thermal-receipt thermal-receipt--${paperWidth} receipt-print-style-${getReceiptPrintStyle()}`}
       style={style}
       role="document"
     >

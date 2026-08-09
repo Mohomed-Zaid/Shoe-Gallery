@@ -16,7 +16,17 @@ import {
 } from '../components/ui';
 import { SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
 import { usePWAInstall } from '../pwa/install';
-import { printReceiptWidthTest } from '../services/receiptPrintService';
+import { printReceiptQualityTest, printReceiptWidthTest } from '../services/receiptPrintService';
+import {
+  getReceiptPrintStyle,
+  setReceiptPrintStyle,
+  type ReceiptPrintStyle,
+} from '../services/receiptPrintStyle';
+import {
+  getBarcodePrintDensity,
+  setBarcodePrintDensity,
+  type BarcodePrintDensity,
+} from '../services/barcodeLabelPrintService';
 
 interface SettingsFormValues {
   store_name: string;
@@ -31,7 +41,9 @@ interface SettingsFormValues {
   default_low_stock_limit: number;
   receipt_printing: 'ask' | 'automatic' | 'none';
   receipt_paper_width_mm:58|80; receipt_printable_width_mm:number; receipt_orientation:'portrait'|'landscape'; receipt_left_padding_mm:number; receipt_right_padding_mm:number; receipt_top_padding_mm:number; receipt_bottom_padding_mm:number; receipt_font_size_px:number; receipt_horizontal_offset_mm:number; receipt_show_logo:boolean; receipt_show_customer:boolean; receipt_show_barcode:boolean; receipt_show_return_policy:boolean;
+  receipt_print_style: ReceiptPrintStyle;
   barcode_horizontal_offset_mm:number; barcode_vertical_offset_mm:number; barcode_width:number; barcode_height:number;
+  barcode_print_density: BarcodePrintDensity;
 }
 
 function normaliseBarcodeWidth(value: number | undefined) {
@@ -41,7 +53,7 @@ function normaliseBarcodeWidth(value: number | undefined) {
 
 function normaliseBarcodeHeight(value: number | undefined) {
   const height = Number(value);
-  return [24, 28, 32, 36, 40].includes(height) ? height : 32;
+  return [24, 28, 32, 36, 40].includes(height) ? height : 36;
 }
 
 export function Settings() {
@@ -86,14 +98,16 @@ export function Settings() {
           receipt_left_padding_mm: Number(nextSettings.receipt_left_padding_mm) === 4 && Number(nextSettings.receipt_right_padding_mm) === 4 ? 2 : Number(nextSettings.receipt_left_padding_mm ?? 2),
           receipt_right_padding_mm: Number(nextSettings.receipt_left_padding_mm) === 4 && Number(nextSettings.receipt_right_padding_mm) === 4 ? 3 : Number(nextSettings.receipt_right_padding_mm ?? 3),
           receipt_top_padding_mm: Number(nextSettings.receipt_top_padding_mm ?? 2),
-          receipt_bottom_padding_mm: Number(nextSettings.receipt_bottom_padding_mm ?? 2),
-          receipt_font_size_px: Number(nextSettings.receipt_font_size_px) === 11 ? 10 : Number(nextSettings.receipt_font_size_px ?? 10),
+          receipt_bottom_padding_mm: Math.min(3, Math.max(0, Number(nextSettings.receipt_bottom_padding_mm ?? 1))),
+          receipt_font_size_px: Math.min(14, Math.max(11, Number(nextSettings.receipt_font_size_px ?? 11))),
           receipt_horizontal_offset_mm: Number(nextSettings.receipt_horizontal_offset_mm ?? 0),
           receipt_show_logo: nextSettings.receipt_show_logo ?? false,
           receipt_show_customer: nextSettings.receipt_show_customer ?? true,
           receipt_show_barcode: nextSettings.receipt_show_barcode ?? false,
           receipt_show_return_policy: nextSettings.receipt_show_return_policy ?? true,
+          receipt_print_style: getReceiptPrintStyle(),
           barcode_horizontal_offset_mm:Number(nextSettings.barcode_horizontal_offset_mm??0),barcode_vertical_offset_mm:Number(nextSettings.barcode_vertical_offset_mm??0),barcode_width:normaliseBarcodeWidth(nextSettings.barcode_width),barcode_height:normaliseBarcodeHeight(nextSettings.barcode_height),
+          barcode_print_density: getBarcodePrintDensity(),
         });
       }
     }
@@ -141,6 +155,8 @@ export function Settings() {
       return;
     }
 
+    setReceiptPrintStyle(values.receipt_print_style);
+    setBarcodePrintDensity(values.barcode_print_density);
     setSettings(data as StoreSettings);
     setSuccess('Settings updated successfully.');
   };
@@ -152,6 +168,16 @@ export function Settings() {
       printReceiptWidthTest();
     } catch (printError) {
       setError(getErrorMessage(printError, 'Unable to open receipt width test.'));
+    }
+  };
+
+  const handleReceiptQualityTest = () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      printReceiptQualityTest();
+    } catch (printError) {
+      setError(getErrorMessage(printError, 'Unable to open receipt quality test.'));
     }
   };
 
@@ -234,6 +260,11 @@ export function Settings() {
                   <option value="ask">Ask Before Printing</option>
                   <option value="none">Do Not Print</option>
                 </Select>
+                <Select label="Print Style" {...register('receipt_print_style')}>
+                  <option value="normal">Normal</option>
+                  <option value="dark">Dark (Recommended)</option>
+                  <option value="extra-dark">Extra Dark</option>
+                </Select>
                 <Select
                   label="Paper Width"
                   {...register('receipt_paper_width_mm', { valueAsNumber: true })}
@@ -283,7 +314,7 @@ export function Settings() {
                 />
                 <Input
                   type="number"
-                  min="8"
+                  min="11"
                   max="14"
                   step="0.5"
                   required
@@ -302,7 +333,7 @@ export function Settings() {
                 <Input
                   type="number"
                   min="0"
-                  max="10"
+                  max="3"
                   step="0.5"
                   required
                   label="Bottom Padding (mm)"
@@ -326,13 +357,17 @@ export function Settings() {
                   <Printer size={16} />
                   Print Width Test
                 </Button>
+                <Button type="button" variant="secondary" onClick={handleReceiptQualityTest}>
+                  <Printer size={16} />
+                  Print Quality Test
+                </Button>
                 <p className="text-xs text-dashboard-text-sub">
-                  Calibration only: prints 68, 70, 72, 74, and 76mm boundary lines, not a sale.
+                  Calibration only. These tests do not create a sale.
                 </p>
               </div>
               <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub">
                 For an 80mm roll, start with 72mm printable width, 2mm left padding, 3mm right padding,
-                and 0mm horizontal offset. Print at 100% scale with zero/minimum driver margins.
+                and 0mm horizontal offset. Print at 100% scale with zero/minimum driver margins. If the receipt prints too light, increase printer Darkness / Density in Windows printer preferences and reduce print speed slightly if characters are incomplete. If blank paper still feeds after the receipt, select continuous receipt-roll media instead of an A4 or fixed-length page and use the printer's minimum cut/feed setting.
               </div>
             </div>
 
@@ -346,11 +381,16 @@ export function Settings() {
                 <Input type="number" min="-3" max="3" step="0.1" required label="Vertical Offset (mm)" {...register('barcode_vertical_offset_mm',{valueAsNumber:true})}/>
                 <Input type="number" min="0.8" max="1" step="0.05" required label="Barcode Width" {...register('barcode_width',{valueAsNumber:true})}/>
                 <Input type="number" min="24" max="40" step="4" required label="Barcode Height" {...register('barcode_height',{valueAsNumber:true})}/>
+                <Select label="Print Density" {...register('barcode_print_density')}>
+                  <option value="normal">Normal</option>
+                  <option value="dark">Dark (Recommended)</option>
+                  <option value="extra-dark">Extra Dark</option>
+                </Select>
               </div>
               <p className="mt-3 text-xs text-dashboard-text-sub">Label dimensions are fixed. Barcode width, barcode height, and offset calibration apply only within the 30mm × 20mm label.</p>
               <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-relaxed text-dashboard-text-sub">
                 <strong className="text-dashboard-text-primary">Select 30mm × 20mm in the printer driver for correct label printing.</strong>{' '}
-                Use 100% scale and 0/minimum margins. Save as PDF is for visual testing only and does not confirm the physical label size.
+                Use 100% scale and 0/minimum margins. If the barcode prints too light, increase Darkness / Density in the physical printer driver and reduce print speed slightly if thin bars disappear.
               </div>
             </div>
 

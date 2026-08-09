@@ -3,51 +3,106 @@
   height: 20mm;
   box-sizing: border-box;
   margin: 0;
-  padding: 1mm;
-  background: white;
-  color: black;
+  padding: 0.65mm 1.1mm 0.55mm;
+  overflow: hidden;
+  background: #fff !important;
+  color: #000 !important;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: center;
+  opacity: 1 !important;
+}
+
+.barcode-store-name {
+  height: 3mm;
+  overflow: hidden;
+  color: #000 !important;
+  font-size: 2.85mm;
+  font-weight: 900;
+  line-height: 3mm;
+  letter-spacing: 0.08mm;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.barcode-svg-wrapper {
+  width: 100%;
+  height: 9.55mm;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   overflow: hidden;
+  background: #fff !important;
 }
 
-.barcode-svg {
-  width: 26mm;
-  max-width: 26mm;
-  height: auto;
+.barcode-svg-wrapper .barcode-svg {
   display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  shape-rendering: crispEdges;
 }
 
+/* JsBarcode owns every rect's x/width. Only its bar group is made opaque black. */
+.barcode-svg-wrapper .barcode-svg > rect {
+  fill: #fff !important;
+  stroke: none !important;
+}
+
+.barcode-svg-wrapper .barcode-svg > g rect {
+  fill: #000 !important;
+  stroke: none !important;
+  opacity: 1 !important;
+}
+
+.barcode-item-number,
 .barcode-number {
-  margin-top: 0.5mm;
-  font-size: 7px;
-  line-height: 1;
+  width: 100%;
+  overflow: hidden;
+  color: #000 !important;
+  opacity: 1 !important;
   text-align: center;
   white-space: nowrap;
 }
 
+.barcode-item-number {
+  height: 2.5mm;
+  margin-top: 0.2mm;
+  font-size: 2.5mm;
+  font-weight: 800;
+  line-height: 2.5mm;
+  letter-spacing: 0.04mm;
+}
+
+.barcode-number {
+  height: 2.2mm;
+  font-size: 2.15mm;
+  font-weight: 800;
+  line-height: 2.2mm;
+  letter-spacing: 0.08mm;
+}
+
+.barcode-density-extra-dark .barcode-store-name,
+.barcode-density-extra-dark .barcode-item-number,
+.barcode-density-extra-dark .barcode-number {
+  font-weight: 900;
+}
+
 .barcode-label-preview {
-  width: min(100%, 90mm);
+  width: 30mm;
+  max-width: 100%;
   aspect-ratio: 3 / 2;
   margin-inline: auto;
   overflow: hidden;
-  background: white;
+  background: #fff !important;
 }
 
-.barcode-label-preview .barcode-label {
-  width: 100%;
-  height: 100%;
-  padding: 3.333%;
-}
-
-.barcode-label-preview .barcode-svg {
-  width: 86.667%;
-  max-width: 86.667%;
-}
-
-.barcode-label-preview .barcode-number {
-  margin-top: 1.667%;
-  font-size: 21px;
+@media print {
+  .barcode-label,
+  .barcode-label * {
+    color: #000 !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+    filter: none !important;
+  }
 }
