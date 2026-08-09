@@ -39,7 +39,7 @@ export const navItems: NavItem[] = [
   { path: '/cash-register', label: 'Cash Register', icon: CircleDollarSign, roles: ['admin', 'cashier'] },
   { path: '/sales', label: 'Sales', icon: ReceiptText, roles: ['admin', 'cashier'] },
   { path: '/returns', label: 'Sales Returns', icon: RotateCcw, roles: ['admin', 'cashier'] },
-  { path: '/reports/sales', label: 'Sales Report', icon: BarChart3, roles: ['admin'] },
+  { path: '/reports/sales', label: 'Sales Report', icon: BarChart3, roles: ['admin', 'cashier'] },
   { path: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
 ];
 

@@ -1,11 +1,72 @@
-export type ReportPreset = 'today'|'yesterday'|'last_7_days'|'this_week'|'last_30_days'|'this_month'|'last_month'|'this_year'|'custom';
-export type ReportTab = 'invoices'|'products'|'customers'|'cashiers'|'categories'|'brands'|'payments';
-export interface SalesReportFilters { startDate:string; endDate:string; invoice?:string; customer?:string; phone?:string; cashier?:string; product?:string; category?:string; brand?:string; size?:string; colour?:string; barcode?:string; paymentMethod?:string; saleType?:string; status?:string; minTotal?:string; maxTotal?:string; search?:string; }
-export interface ReportItem { id:string; sale_id:string; product_name:string; barcode:string|null; category:string|null; brand:string|null; size:string|null; colour:string|null; item_type:'Inventory'|'Instant Billing'; quantity_sold:number; quantity_returned:number; net_quantity:number; cost_price:number|null; selling_price:number; original_value:number; discount:number; returned_value:number; net_revenue:number; cost_total:number|null; profit:number|null; profit_margin:number|null; current_stock:number|null; }
-export interface ReportInvoice { id:string; invoice_number:string; created_at:string; customer_name:string; customer_phone:string|null; cashier_name:string; total_items:number; total_quantity:number; gross_amount:number; item_discount:number; invoice_discount:number; returned_amount:number; net_amount:number; cost_of_goods:number|null; gross_profit:number|null; profit_margin:number|null; amount_paid:number; outstanding:number; payment_method:string; payment_status:string; sale_type:string; status:string; notes:string|null; items:ReportItem[]; payments:ReportPayment[]; returns:ReportReturn[]; }
-export interface ReportPayment { id:string; sale_id:string; invoice_number?:string; payment_method:string; amount:number; reference_number:string|null; payment_date:string; received_by_name?:string|null; notes:string|null; }
-export interface ReportReturn { id:string; sale_id:string; invoice_number?:string; return_number:string; created_at:string; refund_amount:number; reason?:string|null; processed_by?:string|null; }
-export interface SummaryRow { key:string; label:string; invoices:number; quantity_sold:number; quantity_returned:number; net_quantity:number; gross_sales:number; discounts:number; returns:number; net_sales:number; amount_paid:number; outstanding:number; cost_of_goods:number|null; gross_profit:number|null; profit_margin:number|null; last_purchase_date?:string; current_stock?:number|null; }
-export interface SalesReportSummary { total_invoices:number; completed_invoices:number; cancelled_invoices:number; total_quantity_sold:number; gross_sales:number; invoice_discounts:number; item_discounts:number; returned_amount:number; net_sales:number; cost_of_goods:number|null; gross_profit:number|null; gross_profit_margin:number|null; cash_sales:number; card_sales:number; bank_transfer_sales:number; credit_sales:number; amount_received:number; outstanding_amount:number; average_invoice_value:number; unique_customers:number; inventory_sale_total:number; instant_billing_total:number; missing_cost_items:number; refunds_issued:number; }
-export interface ChartPoint { period:string; revenue:number; cost:number; profit:number; quantity:number; }
-export interface SalesReportData { summary:SalesReportSummary; invoices:ReportInvoice[]; products:SummaryRow[]; customers:SummaryRow[]; cashiers:SummaryRow[]; categories:SummaryRow[]; brands:SummaryRow[]; payments:ReportPayment[]; returns:ReportReturn[]; charts:{trend:ChartPoint[]; payment:Array<{name:string;value:number}>; category:Array<{name:string;value:number}>; topProducts:Array<{name:string;value:number;profit:number|null}>; cashier:Array<{name:string;value:number}>}; store:{store_name:string;logo_url:string|null;address:string|null;phone:string|null;email:string|null}; generated_at:string; }
+export type ReportPreset = 'today' | 'yesterday' | 'last_7_days' | 'this_month' | 'custom';
+export type ReportPageSize = 25 | 50 | 100;
+export type ReportSort =
+  | 'newest'
+  | 'oldest'
+  | 'invoice_asc'
+  | 'invoice_desc'
+  | 'total_asc'
+  | 'total_desc'
+  | 'customer_asc';
+
+export interface SalesReportFilters {
+  startDate: string;
+  endDate: string;
+  invoiceNumber: string;
+  customerId: string;
+  cashierId: string;
+  paymentMethod: string;
+  status: string;
+}
+
+export interface SalesReportRow {
+  id: string;
+  invoice_number: string;
+  created_at: string;
+  customer_id: string | null;
+  customer_name: string;
+  cashier_id: string | null;
+  cashier_name: string;
+  item_count: number;
+  total_quantity: number;
+  subtotal: number;
+  discount: number;
+  total: number;
+  amount_paid: number;
+  balance: number;
+  payment_method: string;
+  status: string;
+}
+
+export interface SalesReportSummary {
+  total_sales: number;
+  total_invoices: number;
+  total_quantity: number;
+  total_received: number;
+  total_outstanding: number;
+  total_discounts: number;
+}
+
+export interface SalesReportResult {
+  rows: SalesReportRow[];
+  total: number;
+  summary: SalesReportSummary;
+}
+
+export interface SalesReportFilterOptions {
+  customers: Array<{ id: string; name: string }>;
+  cashiers: Array<{ id: string; name: string }>;
+}
+
+export interface SalesReportStore {
+  store_name: string;
+  address: string | null;
+  phone: string | null;
+}
+
+export interface SalesReportExportData {
+  rows: SalesReportRow[];
+  summary: SalesReportSummary;
+  store: SalesReportStore;
+  generatedAt: string;
+}

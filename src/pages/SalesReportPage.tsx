@@ -1,16 +1,309 @@
-import { useCallback,useEffect,useState } from 'react'; import { Download,FileDown,FileSpreadsheet } from 'lucide-react';
-import { Alert,Button,LoadingSpinner,PageHeader } from '../components/ui'; import { useAuth } from '../context/AuthContext';
-import type { ReportInvoice,ReportPreset,ReportTab,SalesReportData,SalesReportFilters as Filters,SummaryRow } from '../types/salesReport';
-import { getSalesReport,downloadBlob,exportWorkbook,toCsv } from '../services/salesReportService'; import { getErrorMessage } from '../utils/errors';
-import { downloadSalesReportPdf } from '../services/salesReportPdf';
-import { SalesReportFilters,presetDates } from '../components/reports/SalesReportFilters'; import { SalesSummaryCards } from '../components/reports/SalesSummaryCards'; import { DetailedInvoiceTable } from '../components/reports/DetailedInvoiceTable'; import { ReportSummaryTable } from '../components/reports/ReportSummaryTable'; import { SalesPaymentSummary } from '../components/reports/SalesPaymentSummary'; import { SalesReportCharts } from '../components/reports/SalesReportCharts'; import { SaleDetailsModal } from '../components/reports/SaleDetailsModal'; import { SalesReportPrintView } from '../components/reports/SalesReportPrintView';
+import { useCallback, useEffect, useState } from 'react';
+import { Download, Eye, FileSpreadsheet, FileText, Printer } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Alert, Button, DataTable, LoadingSpinner, PageHeader, Pagination, Select } from '../components/ui';
+import { SalesReportFilters } from '../components/reports/SalesReportFilters';
+import { ThermalReceipt } from '../components/receipt/ThermalReceipt';
+import { useAuth } from '../context/AuthContext';
+import type { SaleWithRelations } from '../services/salesService';
+import * as salesService from '../services/salesService';
+import * as settingsService from '../services/settingsService';
+import {
+  exportSimpleSalesReportCsv,
+  exportSimpleSalesReportExcel,
+  formatPaymentMethod,
+  formatStatus,
+  getSalesReportExportData,
+  getSalesReportFilterOptions,
+  getSimpleSalesReport,
+} from '../services/salesReportService';
+import { downloadSimpleSalesReportPdf } from '../services/salesReportPdf';
+import { printReceipt } from '../services/receiptPrintService';
+import type { StoreSettings } from '../types';
+import type {
+  ReportPageSize,
+  ReportPreset,
+  ReportSort,
+  SalesReportFilterOptions,
+  SalesReportFilters as Filters,
+  SalesReportRow,
+  SalesReportSummary,
+} from '../types/salesReport';
+import { getErrorMessage } from '../utils/errors';
+import { formatCurrency } from '../utils/format';
+import { presetDates } from '../utils/salesReportDates';
 
-function aggregate(invoices:ReportInvoice[],kind:'product'|'customer'|'cashier'|'category'|'brand'):SummaryRow[]{const map=new Map<string,SummaryRow&{ids:Set<string>;missing:boolean}>();for(const x of invoices){if(x.status==='cancelled')continue;const list=kind==='customer'||kind==='cashier'?[{key:kind==='customer'?x.customer_name:x.cashier_name,label:kind==='customer'?x.customer_name:x.cashier_name,sold:x.total_quantity,returned:0,netQty:x.total_quantity,gross:x.gross_amount,disc:x.item_discount+x.invoice_discount,returns:x.returned_amount,net:x.net_amount,cost:x.cost_of_goods,profit:x.gross_profit}]:x.items.map(i=>{const label=kind==='product'?`${i.product_name}${i.size?' · '+i.size:''}${i.colour?' · '+i.colour:''}`:kind==='category'?(i.category||'Uncategorized'):(i.brand||'Unbranded');return{key:kind==='product'?`${i.product_name}|${i.barcode}|${i.size}|${i.colour}`:label,label,sold:i.quantity_sold,returned:i.quantity_returned,netQty:i.net_quantity,gross:i.original_value,disc:i.discount,returns:i.returned_value,net:i.net_revenue,cost:i.cost_total,profit:i.profit}});for(const e of list){let r=map.get(e.key);if(!r){r={key:e.key,label:e.label,invoices:0,quantity_sold:0,quantity_returned:0,net_quantity:0,gross_sales:0,discounts:0,returns:0,net_sales:0,amount_paid:0,outstanding:0,cost_of_goods:0,gross_profit:0,profit_margin:null,ids:new Set(),missing:false};map.set(e.key,r)}r.ids.add(x.id);r.quantity_sold+=e.sold;r.quantity_returned+=e.returned;r.net_quantity+=e.netQty;r.gross_sales+=e.gross;r.discounts+=e.disc;r.returns+=e.returns;r.net_sales+=e.net;if(e.cost==null)r.missing=true;else r.cost_of_goods=(r.cost_of_goods??0)+e.cost;if(e.profit!=null)r.gross_profit=(r.gross_profit??0)+e.profit;if(kind==='customer'||kind==='cashier'){r.amount_paid+=x.amount_paid;r.outstanding+=x.outstanding}}}return [...map.values()].map(({ids,missing,...r})=>({...r,invoices:ids.size,cost_of_goods:missing?null:r.cost_of_goods,gross_profit:missing?null:r.gross_profit,profit_margin:missing||!r.net_sales?null:(r.gross_profit??0)/r.net_sales*100})).sort((a,b)=>b.net_sales-a.net_sales)}
+const createDefaultFilters = (): Filters => ({
+  ...presetDates('this_month'),
+  invoiceNumber: '',
+  customerId: '',
+  cashierId: '',
+  paymentMethod: '',
+  status: '',
+});
 
-export function SalesReportPage(){const {profile}=useAuth();const [preset,setPreset]=useState<ReportPreset>('this_month');const [filters,setFilters]=useState<Filters>(presetDates('this_month'));const [data,setData]=useState<SalesReportData|null>(null);const [loading,setLoading]=useState(true);const [error,setError]=useState<string>();const [tab,setTab]=useState<ReportTab>('invoices');const [selected,setSelected]=useState<ReportInvoice|null>(null);const showProfit=profile?.role==='admin';
- const load=useCallback(async()=>{setLoading(true);setError(undefined);try{const d=await getSalesReport(filters);d.invoices=d.invoices.map(x=>({...x,payments:d.payments.filter(p=>p.sale_id===x.id),returns:d.returns.filter(r=>r.sale_id===x.id)}));d.products=aggregate(d.invoices,'product');d.customers=aggregate(d.invoices,'customer');d.cashiers=aggregate(d.invoices,'cashier');d.categories=aggregate(d.invoices,'category');d.brands=aggregate(d.invoices,'brand');setData(d)}catch(e){setError(getErrorMessage(e))}finally{setLoading(false)}},[filters]);useEffect(()=>{void load()},[]);
- const changePreset=(p:ReportPreset)=>{setPreset(p);if(p!=='custom')setFilters(f=>({...f,...presetDates(p)}))};const reset=()=>{setPreset('this_month');setFilters(presetDates('this_month'))};
- const csv=()=>{if(!data)return;const rows=tab==='payments'?data.payments.map(x=>[x.invoice_number,x.payment_method,x.amount,x.reference_number,x.payment_date]):data.invoices.map(x=>[x.invoice_number,x.created_at,x.customer_name,x.cashier_name,x.gross_amount,x.net_amount,x.cost_of_goods,x.gross_profit,x.amount_paid,x.outstanding,x.status]);downloadBlob(`sales-${tab}.csv`,toCsv(tab==='payments'?['Invoice','Method','Amount','Reference','Date']:['Invoice','Date','Customer','Cashier','Gross','Net','Cost','Profit','Paid','Outstanding','Status'],rows),'text/csv;charset=utf-8')};
- const tabs:Array<[ReportTab,string]>=[['invoices','Invoices'],['products','Product Sales'],['customers','Customer Summary'],['cashiers','Cashier Summary'],['categories','Category Summary'],['brands','Brand Summary'],['payments','Payments']];
- const downloadPdf=()=>data&&downloadSalesReportPdf(data,filters,profile?.full_name||profile?.email||'User');
- return <div className="sales-report-page space-y-6"><div className="print-hidden"><PageHeader title="Detailed Sales Report" description="Historical cost, returns, payments, receivables and profitability from Supabase." action={<div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={!data} onClick={csv}><Download size={16}/>CSV</Button>{showProfit&&<Button variant="secondary" disabled={!data} onClick={()=>data&&exportWorkbook(data)}><FileSpreadsheet size={16}/>Excel</Button>}<Button variant="secondary" disabled={!data} onClick={()=>void downloadPdf()}><FileDown size={16}/>Download PDF</Button></div>}/></div><SalesReportFilters value={filters} preset={preset} onPreset={changePreset} onChange={f=>{setFilters(f);setPreset('custom')}} onApply={()=>void load()} onReset={reset}/>{error&&<Alert message={error}/>} {loading?<LoadingSpinner/>:data&&<><div className="print-hidden space-y-6"><SalesSummaryCards s={data.summary} showProfit={showProfit}/><SalesReportCharts invoices={data.invoices}/><div className="flex gap-2 overflow-x-auto border-b border-white/10">{tabs.map(([k,l])=><button key={k} className={`whitespace-nowrap px-4 py-3 text-sm ${tab===k?'border-b-2 border-sky-400 text-white':'text-dashboard-text-sub'}`} onClick={()=>setTab(k)}>{l}</button>)}</div>{tab==='invoices'&&<DetailedInvoiceTable rows={data.invoices} onView={setSelected} showProfit={showProfit}/>} {tab==='products'&&<ReportSummaryTable title="Product Sales Details" rows={data.products} showProfit={showProfit}/>} {tab==='customers'&&<ReportSummaryTable title="Customer Summary" rows={data.customers} showProfit={showProfit}/>} {tab==='cashiers'&&<ReportSummaryTable title="Cashier Summary" rows={data.cashiers} showProfit={showProfit}/>} {tab==='categories'&&<ReportSummaryTable title="Category Summary" rows={data.categories} showProfit={showProfit}/>} {tab==='brands'&&<ReportSummaryTable title="Brand Summary" rows={data.brands} showProfit={showProfit}/>} {tab==='payments'&&<SalesPaymentSummary data={data}/>}</div><SalesReportPrintView data={data} filters={filters} generatedBy={profile?.full_name||profile?.email||'User'}/><SaleDetailsModal sale={selected} onClose={()=>setSelected(null)} showProfit={showProfit}/></>}</div>}
+const emptySummary: SalesReportSummary = {
+  total_sales: 0,
+  total_invoices: 0,
+  total_quantity: 0,
+  total_received: 0,
+  total_outstanding: 0,
+  total_discounts: 0,
+};
+
+const emptyOptions: SalesReportFilterOptions = { customers: [], cashiers: [] };
+
+export function SalesReportPage() {
+  const { profile } = useAuth();
+  const [preset, setPreset] = useState<ReportPreset>('this_month');
+  const [draft, setDraft] = useState<Filters>(createDefaultFilters);
+  const [filters, setFilters] = useState<Filters>(createDefaultFilters);
+  const [options, setOptions] = useState<SalesReportFilterOptions>(emptyOptions);
+  const [rows, setRows] = useState<SalesReportRow[]>([]);
+  const [summary, setSummary] = useState<SalesReportSummary>(emptySummary);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<ReportPageSize>(25);
+  const [sort, setSort] = useState<ReportSort>('newest');
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [printingId, setPrintingId] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    void getSalesReportFilterOptions()
+      .then(setOptions)
+      .catch((reason) => setError(getErrorMessage(reason)));
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(undefined);
+    try {
+      const result = await getSimpleSalesReport(filters, page, pageSize, sort);
+      setRows(result.rows);
+      setTotal(result.total);
+      setSummary(result.summary);
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, page, pageSize, sort]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const choosePreset = (next: ReportPreset) => {
+    setPreset(next);
+    if (next !== 'custom') setDraft((current) => ({ ...current, ...presetDates(next) }));
+  };
+
+  const applyFilters = () => {
+    setPage(1);
+    setFilters(draft);
+  };
+
+  const resetFilters = () => {
+    const defaults = createDefaultFilters();
+    setPreset('this_month');
+    setDraft(defaults);
+    setFilters(defaults);
+    setPage(1);
+    setSort('newest');
+  };
+
+  const prepareExport = async (action: (data: Awaited<ReturnType<typeof getSalesReportExportData>>) => void) => {
+    setExporting(true);
+    setError(undefined);
+    try {
+      action(await getSalesReportExportData(filters, sort));
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const printSale = async (row: SalesReportRow) => {
+    setPrintingId(row.id);
+    setError(undefined);
+    try {
+      const [saleResult, settingsResult] = await Promise.all([
+        salesService.getSaleById(row.id),
+        settingsService.getStoreSettings(),
+      ]);
+      if (saleResult.error) throw saleResult.error;
+      if (settingsResult.error) throw settingsResult.error;
+      const sale = saleResult.data as SaleWithRelations | null;
+      if (!sale) throw new Error('Sale not found.');
+      const settings = settingsResult.data as StoreSettings | null;
+      printReceipt(
+        <ThermalReceipt
+          sale={sale}
+          items={sale.sale_items ?? []}
+          payments={sale.sale_payments ?? []}
+          customer={sale.customer}
+          store={settings}
+        />,
+        { orientation: settings?.receipt_orientation ?? 'landscape' },
+      );
+    } catch (reason) {
+      setError(getErrorMessage(reason, 'Unable to print this receipt.'));
+    } finally {
+      setPrintingId(undefined);
+    }
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <div className="sales-report-page space-y-5">
+      <PageHeader
+        title="Sales Report"
+        description="A simple invoice-level report. One sale always produces one row."
+        action={
+          <div className="flex flex-wrap gap-2 print-hidden">
+            <Button variant="secondary" disabled={exporting} onClick={() => void prepareExport(exportSimpleSalesReportCsv)}>
+              <Download size={16} />CSV
+            </Button>
+            <Button variant="secondary" disabled={exporting} onClick={() => void prepareExport(exportSimpleSalesReportExcel)}>
+              <FileSpreadsheet size={16} />Excel
+            </Button>
+            <Button variant="secondary" disabled={exporting} onClick={() => void prepareExport((data) => downloadSimpleSalesReportPdf(data, filters, profile?.full_name || profile?.email || 'User'))}>
+              <FileText size={16} />{exporting ? 'Preparing…' : 'PDF'}
+            </Button>
+          </div>
+        }
+      />
+
+      <SalesReportFilters
+        value={draft}
+        preset={preset}
+        options={options}
+        onPreset={choosePreset}
+        onChange={(value) => { setDraft(value); setPreset('custom'); }}
+        onApply={applyFilters}
+        onReset={resetFilters}
+      />
+
+      {error && <Alert message={error} />}
+      <SummaryCards summary={summary} />
+
+      <section className="glass-card overflow-hidden">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 p-4 print-hidden">
+          <div>
+            <h2 className="font-semibold text-dashboard-text-primary">Invoices</h2>
+            <p className="text-xs text-dashboard-text-sub">{total.toLocaleString()} matching sales</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Select label="Sort" value={sort} onChange={(event) => { setSort(event.target.value as ReportSort); setPage(1); }}>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="invoice_asc">Invoice A–Z</option>
+              <option value="invoice_desc">Invoice Z–A</option>
+              <option value="total_desc">Total high–low</option>
+              <option value="total_asc">Total low–high</option>
+              <option value="customer_asc">Customer A–Z</option>
+            </Select>
+            <Select label="Rows" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value) as ReportPageSize); setPage(1); }}>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </Select>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-72 items-center justify-center"><LoadingSpinner /></div>
+        ) : (
+          <SalesTable rows={rows} printingId={printingId} onPrint={printSale} />
+        )}
+      </section>
+
+      {!loading && <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />}
+    </div>
+  );
+}
+
+function SummaryCards({ summary }: { summary: SalesReportSummary }) {
+  const cards = [
+    ['Total Sales', formatCurrency(summary.total_sales)],
+    ['Total Invoices', summary.total_invoices.toLocaleString()],
+    ['Quantity Sold', summary.total_quantity.toLocaleString()],
+    ['Total Received', formatCurrency(summary.total_received)],
+    ['Outstanding', formatCurrency(summary.total_outstanding)],
+    ['Discounts', formatCurrency(summary.total_discounts)],
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      {cards.map(([label, value]) => (
+        <div key={label} className="glass-card p-4">
+          <p className="text-xs uppercase tracking-wide text-dashboard-text-label">{label}</p>
+          <p className="mt-2 text-xl font-bold text-dashboard-text-primary">{value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SalesTable({
+  rows,
+  printingId,
+  onPrint,
+}: {
+  rows: SalesReportRow[];
+  printingId?: string;
+  onPrint: (row: SalesReportRow) => Promise<void>;
+}) {
+  return (
+    <DataTable
+      columns={[
+        { key: 'invoice', header: 'Invoice' },
+        { key: 'date', header: 'Date' },
+        { key: 'time', header: 'Time' },
+        { key: 'customer', header: 'Customer' },
+        { key: 'cashier', header: 'Cashier' },
+        { key: 'items', header: 'Items' },
+        { key: 'quantity', header: 'Qty' },
+        { key: 'subtotal', header: 'Subtotal' },
+        { key: 'discount', header: 'Discount' },
+        { key: 'total', header: 'Total' },
+        { key: 'paid', header: 'Paid' },
+        { key: 'balance', header: 'Balance' },
+        { key: 'payment', header: 'Payment' },
+        { key: 'status', header: 'Status' },
+        { key: 'actions', header: 'Actions', className: 'text-right' },
+      ]}
+      isEmpty={rows.length === 0}
+      emptyMessage="No sales match the selected filters."
+    >
+      {rows.map((row) => {
+        const date = new Date(row.created_at);
+        return (
+          <tr key={row.id} className="hover:bg-dashboard-hover">
+            <td className="px-4 py-3 text-sm font-semibold text-dashboard-text-primary">{row.invoice_number}</td>
+            <td className="px-4 py-3 text-sm text-dashboard-text-sub">{date.toLocaleDateString()}</td>
+            <td className="px-4 py-3 text-sm text-dashboard-text-sub">{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+            <td className="px-4 py-3 text-sm text-dashboard-text-sub">{row.customer_name}</td>
+            <td className="px-4 py-3 text-sm text-dashboard-text-sub">{row.cashier_name}</td>
+            <td className="px-4 py-3 text-sm">{row.item_count}</td>
+            <td className="px-4 py-3 text-sm">{row.total_quantity}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.subtotal)}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.discount)}</td>
+            <td className="px-4 py-3 text-sm font-semibold text-dashboard-text-primary">{formatCurrency(row.total)}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.amount_paid)}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.balance)}</td>
+            <td className="px-4 py-3 text-sm text-dashboard-text-sub">{formatPaymentMethod(row.payment_method)}</td>
+            <td className="px-4 py-3 text-sm"><span className="rounded-full border border-white/10 px-2 py-1 text-xs">{formatStatus(row.status)}</span></td>
+            <td className="px-4 py-3">
+              <div className="flex items-center justify-end gap-3">
+                <Link to={`/sales/${row.id}`} title="View sale" className="text-dashboard-text-sub hover:text-dashboard-text-primary"><Eye size={18} /></Link>
+                <button type="button" title="Print receipt" disabled={printingId === row.id} onClick={() => void onPrint(row)} className="text-dashboard-text-sub hover:text-dashboard-text-primary disabled:opacity-40"><Printer size={18} /></button>
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+    </DataTable>
+  );
+}
