@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CreditCard, LogOut, Menu, Sun, X } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronLeft, ChevronRight, CreditCard, LogOut, Menu, Sun, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getNavItemsForRole, getPageTitle } from '../utils/navigation';
 import { isBusinessAdminEmail, SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
@@ -14,6 +14,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const menuItems = getNavItemsForRole(isBusinessAdminEmail(user?.email) ? 'admin' : profile?.role);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(() => location.pathname === '/reports' || location.pathname.startsWith('/reports/'));
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebar-collapsed');
     return saved == null ? window.innerWidth < 1180 : saved === 'true';
@@ -34,6 +35,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => { if (isMobile) setMobileOpen(false); }, [isMobile, location.pathname]);
 
+  useEffect(() => {
+    if (location.pathname === '/reports' || location.pathname.startsWith('/reports/')) setReportsOpen(true);
+  }, [location.pathname]);
+
   const displayName = profile?.full_name || profile?.email?.split('@')[0] || 'User';
   const initial = displayName.charAt(0).toUpperCase();
   const toggleSidebar = () => {
@@ -51,6 +56,55 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </NavLink>
   );
 
+  const reportMenu = menuItems.find((item) => item.path === '/reports');
+  const primaryMenuItems = menuItems.filter((item) => item.path !== '/reports');
+  const toggleReports = () => {
+    const enteringReports = !location.pathname.startsWith('/reports');
+    if (effectiveCollapsed) {
+      setCollapsed(false);
+      localStorage.setItem('sidebar-collapsed', 'false');
+      setReportsOpen(true);
+      if (enteringReports) navigate('/reports');
+      return;
+    }
+    if (enteringReports) {
+      setReportsOpen(true);
+      navigate('/reports');
+      return;
+    }
+    setReportsOpen((open) => !open);
+  };
+
+  const reportsNavigation = reportMenu && (
+    <div className="min-w-0">
+      <button
+        type="button"
+        onClick={toggleReports}
+        title={effectiveCollapsed ? 'Reports' : undefined}
+        aria-label="Reports"
+        aria-expanded={reportsOpen}
+        className={`nav-item w-full ${effectiveCollapsed ? 'justify-center px-2' : ''} ${location.pathname.startsWith('/reports') ? 'nav-active' : 'text-dashboard-text-label hover:bg-dashboard-hover hover:text-dashboard-text-primary'}`}
+      >
+        <BarChart3 size={19} className="shrink-0" />
+        {!effectiveCollapsed && <><span className="min-w-0 flex-1 truncate text-left font-medium">Reports</span><ChevronDown size={16} className={`shrink-0 transition-transform ${reportsOpen ? 'rotate-180' : ''}`} /></>}
+      </button>
+      {!effectiveCollapsed && reportsOpen && (
+        <div className="mt-1 min-w-0 space-y-1 border-l border-white/10 pl-3 ml-4">
+          {reportMenu.children?.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              onClick={() => isMobile && setMobileOpen(false)}
+              className={({ isActive }) => `block min-w-0 truncate rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'bg-dashboard-accent/15 text-dashboard-accent' : 'text-dashboard-text-sub hover:bg-dashboard-hover hover:text-dashboard-text-primary'}`}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return <div
     className="flex min-h-screen min-w-0 bg-dashboard-bg-deep"
     style={{ '--sidebar-width': isMobile ? '0px' : effectiveCollapsed ? '4.5rem' : '16rem' } as CSSProperties}
@@ -61,7 +115,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex min-w-0 items-center gap-3"><img src="/shoe_gallery.jpeg" alt="Shoe Gallery Logo" className="h-9 w-9 shrink-0 rounded-lg object-cover"/>{!effectiveCollapsed && <div className="min-w-0"><h1 className="truncate text-base font-bold text-dashboard-text-primary">Shoe Gallery</h1><p className="truncate text-[11px] text-dashboard-text-sub">Management System</p></div>}</div>
         {isMobile && <button type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-dashboard-text-sub hover:bg-dashboard-hover" aria-label="Close menu"><X size={19}/></button>}
       </div>
-      <nav className="space-y-1 overflow-y-auto p-3">{menuItems.map((item) => navLink(item.path,item.label,item.icon,item.path==='/'))}{user?.email?.toLowerCase()===SUPER_ADMIN_EMAIL && navLink('/admin/subscription','Subscription Management',CreditCard)}</nav>
+      <nav className="min-w-0 space-y-1 overflow-y-auto overflow-x-hidden p-3">{primaryMenuItems.map((item) => navLink(item.path,item.label,item.icon,item.path==='/'))}{reportsNavigation}{user?.email?.toLowerCase()===SUPER_ADMIN_EMAIL && navLink('/admin/subscription','Subscription Management',CreditCard)}</nav>
       {!isMobile && <button type="button" onClick={toggleSidebar} title={effectiveCollapsed?'Expand sidebar':'Collapse sidebar'} className="absolute bottom-4 right-0 translate-x-1/2 rounded-full border border-white/15 bg-emerald-950 p-1.5 text-white shadow-lg">{effectiveCollapsed?<ChevronRight size={16}/>:<ChevronLeft size={16}/>}</button>}
     </aside>}
 

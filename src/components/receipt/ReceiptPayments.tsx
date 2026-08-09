@@ -14,6 +14,7 @@ function PaymentRow({ label, value, method = false }: { label: string; value: st
 }
 
 export function ReceiptPayments({ sale, payments }: { sale: Sale; payments: ReceiptPayment[] }) {
+  const isCardPayment = payments.length <= 1 && (payments[0]?.payment_method || sale.payment_method) === 'card';
   const paid = payments.length > 1
     ? payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
     : Number(sale.amount_tendered ?? sale.paid_amount ?? 0);
@@ -37,7 +38,7 @@ export function ReceiptPayments({ sale, payments }: { sale: Sale; payments: Rece
             method
           />
         )}
-      <PaymentRow label="Paid" value={formatCurrency(paid)} />
+      {!isCardPayment && <PaymentRow label="Paid" value={formatCurrency(paid)} />}
       {change > 0 && <PaymentRow label="Change" value={formatCurrency(change)} />}
       {outstanding > 0 && <PaymentRow label="Outstanding" value={formatCurrency(outstanding)} />}
     </section>

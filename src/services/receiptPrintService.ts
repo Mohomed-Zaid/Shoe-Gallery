@@ -25,7 +25,15 @@ function completePrint(printWindow: Window) {
 }
 
 const receiptDocumentCss = `
-  @page { margin: 0; }
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box !important;
+  }
   html,
   body,
   .thermal-receipt {
@@ -35,27 +43,26 @@ const receiptDocumentCss = `
   }
   html,
   body {
-    width: auto !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
     background: #fff !important;
   }
   body {
-    display: block !important;
-  }
-  .thermal-receipt,
-  .thermal-receipt * {
-    box-sizing: border-box !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
   }
   .thermal-receipt {
     position: static !important;
-    width: var(--receipt-printable-width, 72mm) !important;
-    max-width: var(--receipt-printable-width, 72mm) !important;
-    margin: 0 0 0 var(--receipt-horizontal-offset, 0mm) !important;
+    width: 72mm !important;
+    max-width: 72mm !important;
+    margin: 0 auto !important;
     padding: var(--receipt-top-padding, 2mm) var(--receipt-right-padding, 3mm)
-      1mm var(--receipt-left-padding, 2mm) !important;
-    overflow: hidden !important;
+      var(--receipt-bottom-padding, 1mm) var(--receipt-left-padding, 2mm) !important;
+    overflow: visible !important;
     background: #fff !important;
     color: #000 !important;
     opacity: 1 !important;
@@ -68,6 +75,12 @@ const receiptDocumentCss = `
   }
   .receipt-footer {
     margin-bottom: 2mm !important;
+  }
+  .receipt-info-value,
+  .receipt-item-total,
+  .receipt-total-amount,
+  .receipt-payment-value {
+    padding-right: 1.5mm !important;
   }
 `;
 
@@ -173,8 +186,14 @@ export function printReceiptQualityTest() {
     <p class="bold">BOLD TEXT</p>
     <p class="extra-bold">EXTRA BOLD TEXT</p>
     <p>1234567890</p>
+    <p>LKR 500.00</p>
     <p>LKR 1,500.00</p>
-    <p>LKR 25,000.00</p>
+    <p>LKR 10,000.00</p>
+    <p>LKR 99,999.00</p>
+    <p>LKR 125,500.00</p>
+    <p>LKR 1,250,000.00</p>
+    <p>INV-20260809-123456789</p>
+    <p>cashier.long.email@example.com</p>
     <p>ABCDEFGHIJKLMNOPQRSTUVWXYZ</p>
   `;
   const styles = [

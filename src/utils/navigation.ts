@@ -23,7 +23,18 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   roles: UserRole[];
+  permission?: string;
+  children?: NavItem[];
 }
+
+export const reportNavItems: NavItem[] = [
+  { path: '/reports/sales', label: 'Sales Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.sales.view' },
+  { path: '/reports/purchases', label: 'Purchase Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.purchases.view' },
+  { path: '/reports/inventory', label: 'Inventory Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.inventory.view' },
+  { path: '/reports/returns', label: 'Returns Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.returns.view' },
+  { path: '/reports/profit', label: 'Profit Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.profit.view' },
+  { path: '/reports/cashup', label: 'Cashup Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.cashup.view' },
+];
 
 export const navItems: NavItem[] = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'cashier'] },
@@ -39,19 +50,26 @@ export const navItems: NavItem[] = [
   { path: '/cash-register', label: 'Cash Register', icon: CircleDollarSign, roles: ['admin', 'cashier'] },
   { path: '/sales', label: 'Sales', icon: ReceiptText, roles: ['admin', 'cashier'] },
   { path: '/returns', label: 'Sales Returns', icon: RotateCcw, roles: ['admin', 'cashier'] },
-  { path: '/reports/sales', label: 'Sales Report', icon: BarChart3, roles: ['admin', 'cashier'] },
+  { path: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'cashier'], children: reportNavItems },
   { path: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
 ];
 
 export function getNavItemsForRole(role: UserRole | undefined): NavItem[] {
   if (!role) return [];
-  return navItems.filter((item) => item.roles.includes(role));
+  return navItems
+    .filter((item) => item.roles.includes(role))
+    .map((item) => ({
+      ...item,
+      children: item.children?.filter((child) => child.roles.includes(role)),
+    }));
 }
 
 export function getPageTitle(pathname: string): string {
   if (pathname === '/admin/subscription') return 'Subscription Management';
   const item = navItems.find((nav) => nav.path === pathname);
   if (item) return item.label;
+  const report = reportNavItems.find((nav) => nav.path === pathname);
+  if (report) return report.label;
   if (pathname.startsWith('/products/')) return 'Product Details';
   if (pathname === '/barcode-printing') return 'Barcode Printing';
   if (pathname.startsWith('/customers/')) return 'Customer Details';

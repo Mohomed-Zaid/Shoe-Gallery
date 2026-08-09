@@ -30,11 +30,12 @@ import { SubscriptionExpiredPage } from './pages/SubscriptionExpiredPage';
 import { SubscriptionManagementPage } from './pages/admin/SubscriptionManagementPage';
 import { LoadingSpinner } from './components/ui';
 import { PWAStatus } from './components/pwa/PWAStatus';
+import { ReportsHomePage } from './pages/ReportsHomePage';
+import { ReportPlaceholderPage } from './pages/ReportPlaceholderPage';
+import { InvoiceSalesReportPage } from './pages/InvoiceSalesReportPage';
 
 const BarcodePrinting = lazy(() => import('./pages/BarcodePrinting').then((module) => ({ default: module.BarcodePrinting })));
 const POS = lazy(() => import('./pages/POS').then((module) => ({ default: module.POS })));
-const Reports = lazy(() => import('./pages/Reports').then((module) => ({ default: module.Reports })));
-const SalesReportPage = lazy(() => import('./pages/SalesReportPage').then((module) => ({ default: module.SalesReportPage })));
 
 function App() {
   return (
@@ -72,8 +73,13 @@ function App() {
                       <Route path="/returns" element={<SalesReturnsPage />} />
                       <Route path="/returns/new" element={<CreateSalesReturnPage />} />
                       <Route path="/returns/:id" element={<SalesReturnDetailsPage />} />
-                      <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin']}><Reports /></ProtectedRoute>} />
-                      <Route path="/reports/sales" element={<SalesReportPage />} />
+                      <Route path="/reports" element={<ReportsHomePage />} />
+                      <Route path="/reports/sales" element={<InvoiceSalesReportPage />} />
+                      <Route path="/reports/purchases" element={<ReportPlaceholderPage title="Purchase Report" />} />
+                      <Route path="/reports/inventory" element={<ReportPlaceholderPage title="Inventory Report" />} />
+                      <Route path="/reports/returns" element={<ReportPlaceholderPage title="Returns Report" />} />
+                      <Route path="/reports/profit" element={<ReportPlaceholderPage title="Profit Report" />} />
+                      <Route path="/reports/cashup" element={<ReportPlaceholderPage title="Cashup Report" />} />
                       <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><Settings /></ProtectedRoute>} />
                       <Route path="/admin/subscription" element={<SubscriptionManagementPage />} />
                       <Route path="*" element={<Navigate to="/" replace />} />

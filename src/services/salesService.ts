@@ -151,8 +151,8 @@ export async function createSale(payload: CreateSalePayload) {
   const discountAmount = (payload.discount_amount ?? 0) + itemDiscount;
   const amountAfterDiscount = subtotal - discountAmount;
   const cardPaymentFee = payload.payment_method === 'card' ? calculateCardPaymentFee(amountAfterDiscount) : 0;
-  const taxAmount = (payload.tax_amount ?? 0) + cardPaymentFee;
-  const grandTotal = subtotal - discountAmount + taxAmount;
+  const taxAmount = payload.tax_amount ?? 0;
+  const grandTotal = subtotal - discountAmount + taxAmount + cardPaymentFee;
   if (discountAmount < 0 || grandTotal < 0) {
     throw new Error('Discount cannot exceed the sale amount.');
   }
@@ -181,6 +181,7 @@ export async function createSale(payload: CreateSalePayload) {
       discount_amount: discountAmount,
       invoice_discount_amount: payload.discount_amount ?? 0,
       tax_amount: taxAmount,
+      card_payment_fee: cardPaymentFee,
       total_amount: grandTotal,
       paid_amount: paidAmount,
       amount_tendered: amountTendered,

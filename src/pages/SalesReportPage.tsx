@@ -49,6 +49,7 @@ const emptySummary: SalesReportSummary = {
   total_received: 0,
   total_outstanding: 0,
   total_discounts: 0,
+  total_card_payment_fees: 0,
 };
 
 const emptyOptions: SalesReportFilterOptions = { customers: [], cashiers: [] };
@@ -233,9 +234,10 @@ function SummaryCards({ summary }: { summary: SalesReportSummary }) {
     ['Total Received', formatCurrency(summary.total_received)],
     ['Outstanding', formatCurrency(summary.total_outstanding)],
     ['Discounts', formatCurrency(summary.total_discounts)],
+    ['Card Fees (2.75%)', formatCurrency(summary.total_card_payment_fees)],
   ];
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
       {cards.map(([label, value]) => (
         <div key={label} className="glass-card p-4">
           <p className="text-xs uppercase tracking-wide text-dashboard-text-label">{label}</p>
@@ -267,6 +269,8 @@ function SalesTable({
         { key: 'quantity', header: 'Qty' },
         { key: 'subtotal', header: 'Subtotal' },
         { key: 'discount', header: 'Discount' },
+        { key: 'selling-price', header: 'Selling Price' },
+        { key: 'card-fee', header: 'Card Fee (2.75%)' },
         { key: 'total', header: 'Total' },
         { key: 'paid', header: 'Paid' },
         { key: 'balance', header: 'Balance' },
@@ -290,6 +294,8 @@ function SalesTable({
             <td className="px-4 py-3 text-sm">{row.total_quantity}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.subtotal)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.discount)}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.selling_price)}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.card_payment_fee)}</td>
             <td className="px-4 py-3 text-sm font-semibold text-dashboard-text-primary">{formatCurrency(row.total)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.amount_paid)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.balance)}</td>

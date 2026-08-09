@@ -11,6 +11,8 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 }
 
 export function ReceiptTotals({ sale }: { sale: Sale }) {
+  const invoiceTotal = Math.max(Number(sale.total_amount) - Number(sale.card_payment_fee ?? 0), 0);
+
   return (
     <section className="receipt-section receipt-totals">
       <TotalRow label="Subtotal" value={formatCurrency(Number(sale.subtotal))} />
@@ -21,7 +23,7 @@ export function ReceiptTotals({ sale }: { sale: Sale }) {
         <TotalRow label="Tax" value={formatCurrency(Number(sale.tax_amount))} />
       )}
       <div className="receipt-grand-total">
-        <TotalRow label="TOTAL" value={formatCurrency(Number(sale.total_amount))} />
+        <TotalRow label="TOTAL" value={formatCurrency(invoiceTotal)} />
       </div>
     </section>
   );

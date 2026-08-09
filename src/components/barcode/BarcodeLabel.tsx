@@ -43,10 +43,10 @@ export function BarcodeLabel({
           <div className="barcode-svg-wrapper">
             <svg ref={svgRef} className="barcode-svg" aria-hidden="true" />
           </div>
+          <div className="barcode-number">{barcodeNumber}</div>
           <div className="barcode-item-number">
             {(itemNumber?.trim() || barcodeNumber)} - EACH
           </div>
-          <div className="barcode-number">{barcodeNumber}</div>
         </div>
         <div className="barcode-selling-price">{formatBarcodeLabelPrice(sellingPrice)}</div>
       </div>

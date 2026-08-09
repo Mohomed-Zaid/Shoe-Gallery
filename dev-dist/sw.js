@@ -82,11 +82,12 @@ define(['./workbox-433ac1a8'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.j6vjgaforr4"
+    "revision": "0.ueiim3be0b"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
-    allowlist: [/^\/$/]
+    allowlist: [/^\/$/],
+    denylist: [/^\/assets\//, /\.[^/]+$/]
   }));
   workbox.registerRoute(/^https:\/\/.*\.supabase\.co\//i, new workbox.NetworkOnly(), 'GET');
   workbox.registerRoute(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//i, new workbox.StaleWhileRevalidate({

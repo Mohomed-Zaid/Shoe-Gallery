@@ -31,6 +31,8 @@ export interface SalesReportRow {
   total_quantity: number;
   subtotal: number;
   discount: number;
+  selling_price: number;
+  card_payment_fee: number;
   total: number;
   amount_paid: number;
   balance: number;
@@ -45,6 +47,7 @@ export interface SalesReportSummary {
   total_received: number;
   total_outstanding: number;
   total_discounts: number;
+  total_card_payment_fees: number;
 }
 
 export interface SalesReportResult {

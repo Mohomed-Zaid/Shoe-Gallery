@@ -16,8 +16,8 @@
   height: 3.4mm;
   overflow: hidden;
   color: #000 !important;
-  font-size: 3.2mm;
-  font-weight: 900;
+  font-size: 2.85mm;
+  font-weight: 800;
   line-height: 3.4mm;
   letter-spacing: 0.08mm;
   text-transform: uppercase;
@@ -33,6 +33,9 @@
 }
 
 .barcode-label-main {
+  display: flex;
+  height: 16.2mm;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
 }
@@ -87,8 +90,8 @@
   overflow: visible;
   color: #000 !important;
   font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
-  font-size: 2.3mm;
-  font-weight: 800;
+  font-size: 2.05mm;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.04mm;
   opacity: 1 !important;
@@ -99,27 +102,26 @@
 }
 
 .barcode-item-number {
-  height: 3mm;
-  margin-top: 0.15mm;
-  font-size: 2.65mm;
-  font-weight: 800;
-  line-height: 3mm;
+  height: 3.55mm;
+  font-size: 2.2mm;
+  font-weight: 700;
+  line-height: 3.55mm;
   letter-spacing: 0.04mm;
 }
 
 .barcode-number {
-  height: 2.45mm;
-  font-size: 2.3mm;
-  font-weight: 800;
-  line-height: 2.45mm;
-  letter-spacing: 0.08mm;
+  height: 3.1mm;
+  font-size: 2.1mm;
+  font-weight: 700;
+  line-height: 3.1mm;
+  letter-spacing: 0.06mm;
 }
 
 .barcode-density-extra-dark .barcode-store-name,
 .barcode-density-extra-dark .barcode-selling-price,
 .barcode-density-extra-dark .barcode-item-number,
 .barcode-density-extra-dark .barcode-number {
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .barcode-label-preview {

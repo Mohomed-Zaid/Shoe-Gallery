@@ -92,6 +92,7 @@ export interface Sale {
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
+  card_payment_fee: number;
   total_amount: number;
   paid_amount: number;
   amount_tendered: number | null;
