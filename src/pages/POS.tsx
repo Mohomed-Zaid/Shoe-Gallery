@@ -91,6 +91,7 @@ export function POS() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer' | 'credit'>('cash');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('walk-in');
   const [saleNotes, setSaleNotes] = useState('');
+  const [showSaleNotes, setShowSaleNotes] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showHeldSalesModal, setShowHeldSalesModal] = useState(false);
@@ -312,6 +313,7 @@ export function POS() {
     setCartDiscount(0);
     setAmountReceived(0);
     setSaleNotes('');
+    setShowSaleNotes(false);
     setSelectedCustomerId('walk-in');
     setPaymentMethod('cash');
     setActiveHeldSaleId(null);
@@ -370,6 +372,7 @@ export function POS() {
     setPaymentMethod((heldSale.payment_method as 'cash' | 'card' | 'bank_transfer' | 'credit') ?? 'cash');
     setSelectedCustomerId(heldSale.customer_id || 'walk-in');
     setSaleNotes(heldSale.notes ?? '');
+    setShowSaleNotes(Boolean(heldSale.notes));
     setActiveHeldSaleId(heldSale.id);
     setShowHeldSalesModal(false);
   };
@@ -533,7 +536,7 @@ export function POS() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="pos-page flex min-h-0 flex-col gap-4 overflow-hidden">
       <PageHeader
         title="Point of Sale"
         description="Scan, select, and complete the sale."
@@ -559,8 +562,8 @@ export function POS() {
         <button type="button" onClick={() => setMobilePosTab('cart')} className={`rounded-lg px-3 py-2.5 text-sm font-medium ${mobilePosTab === 'cart' ? 'bg-emerald-500 text-white' : 'text-dashboard-text-label'}`}>Cart ({cart.reduce((sum,item)=>sum+item.quantity,0)})</button>
       </div>
 
-      <div className="pos-workspace grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.72fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
-        <div className={`pos-products-pane min-w-0 space-y-4 ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
+      <div className="pos-workspace grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.72fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
+        <div className={`pos-products-pane min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-contain ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
           <section className="glass-card overflow-visible p-5">
             <div className="relative z-10">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -641,9 +644,9 @@ export function POS() {
           </section>}
         </div>
 
-        <div ref={cartRef} className={`pos-cart-pane glass-card min-w-0 self-start p-4 sm:p-5 lg:sticky lg:top-4 ${mobilePosTab === 'cart' ? 'pos-pane-active' : ''}`}>
-          <div className="relative z-10 space-y-5">
-            <div className="space-y-3">
+        <div ref={cartRef} className={`pos-cart-pane glass-card min-h-0 min-w-0 self-stretch overflow-hidden p-3 sm:p-4 ${mobilePosTab === 'cart' ? 'pos-pane-active' : ''}`}>
+          <div className="relative z-10 flex h-full min-h-0 flex-col gap-3">
+            <div className="pos-customer-controls shrink-0 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div><p className="text-xs uppercase tracking-wider text-dashboard-text-sub">Current invoice</p><h3 className="text-lg font-semibold text-dashboard-text-primary">Cart <span className="text-sm font-normal text-dashboard-text-sub">({cart.reduce((sum, item) => sum + item.quantity, 0)})</span></h3></div>
                 <button type="button" onClick={clearCart} disabled={!cart.length} className="text-xs text-red-300 transition hover:text-red-200 disabled:opacity-40">Clear</button>
@@ -656,14 +659,15 @@ export function POS() {
                   </option>
                 ))}
               </Select>
-              <div className="flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => setShowCustomerModal(true)}>
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" variant="secondary" className="pos-control flex-1" onClick={() => setShowCustomerModal(true)}>
                   <Plus size={16} />
-                  Add New Customer
+                  Add New
                 </Button>
                 <Button
+                  size="sm"
                   variant="outline"
-                  className="flex-1"
+                  className="pos-control flex-1"
                   onClick={() => selectedCustomer && navigate(`/customers/${selectedCustomer.id}`)}
                   disabled={!selectedCustomer}
                 >
@@ -671,19 +675,19 @@ export function POS() {
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" variant="outline" onClick={handleHoldSale} disabled={!cart.length}>Hold sale</Button>
-                <Button size="sm" variant="outline" onClick={() => setShowHeldSalesModal(true)}>Held sales {heldSales.length ? `(${heldSales.length})` : ''}</Button>
+                <Button size="sm" className="pos-control" variant="outline" onClick={handleHoldSale} disabled={!cart.length}>Hold sale</Button>
+                <Button size="sm" className="pos-control" variant="outline" onClick={() => setShowHeldSalesModal(true)}>Held sales {heldSales.length ? `(${heldSales.length})` : ''}</Button>
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="pos-cart-items min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
               {cart.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-dashboard-text-sub">
+                <div className="cart-empty flex min-h-[75px] items-center justify-center rounded-xl border border-dashed border-white/15 p-3 text-center text-sm text-dashboard-text-sub">
                   Add products to begin the sale.
                 </div>
               ) : (
                 cart.map((item) => (
-                  <div key={item.variant_id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div key={item.variant_id} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
@@ -703,7 +707,7 @@ export function POS() {
                       </button>
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-[auto_1fr_120px]">
+                    <div className="mt-2 grid gap-2 md:grid-cols-[auto_1fr_105px]">
                       <div className="flex items-center gap-2">
                         <button type="button" className="rounded-lg border border-white/10 p-2 text-dashboard-text-primary" onClick={() => updateCartQuantity(item.variant_id, item.quantity - 1)}>
                           <Minus size={14} />
@@ -726,7 +730,7 @@ export function POS() {
                       />
                     </div>
 
-                    <div className="mt-3 flex justify-between text-sm">
+                    <div className="mt-2 flex justify-between text-sm">
                       <span className="text-dashboard-text-sub">Line Total</span>
                       <span className="font-medium text-dashboard-text-primary">
                         {formatCurrency(item.unit_price * item.quantity - item.discount_amount)}
@@ -737,37 +741,52 @@ export function POS() {
               )}
             </div>
 
-            <div className="space-y-3 border-t border-white/10 pt-5">
-              <Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as 'cash' | 'card' | 'bank_transfer' | 'credit')}>
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="credit">Credit</option>
-              </Select>
-              {paymentMethod === 'cash' && (
-                <Input
-                  label="Amount Received"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amountReceived}
-                  onChange={(event) => setAmountReceived(Math.max(Number(event.target.value), 0))}
-                  placeholder="Enter cash received"
-                />
-              )}
-              <Textarea rows={2} placeholder="Sale notes" value={saleNotes} onChange={(event) => setSaleNotes(event.target.value)} />
-              <Input
-                label="Overall Sale Discount"
-                type="number"
-                min="0"
-                max={maximumCartDiscount}
-                step="0.01"
-                value={cartDiscount}
-                onChange={(event) => setCartDiscount(Math.min(Math.max(Number(event.target.value), 0), maximumCartDiscount))}
-                placeholder="Enter discount amount"
-              />
+            <div className="pos-checkout-controls shrink-0 space-y-2 border-t border-white/10 pt-3">
+              <div className={`pos-payment-grid grid gap-2 ${paymentMethod === 'cash' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <div>
+                  <Select label="Payment Method" className="pos-control" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as 'cash' | 'card' | 'bank_transfer' | 'credit')}>
+                    <option value="cash">Cash</option>
+                    <option value="card">Card</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="credit">Credit</option>
+                  </Select>
+                </div>
+                {paymentMethod === 'cash' && (
+                  <div>
+                    <Input
+                      label="Amount Received"
+                      className="pos-control"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={amountReceived}
+                      onChange={(event) => setAmountReceived(Math.max(Number(event.target.value), 0))}
+                      placeholder="Cash received"
+                    />
+                  </div>
+                )}
+                <div>
+                  <Input
+                    label="Sale Discount"
+                    className="pos-control"
+                    type="number"
+                    min="0"
+                    max={maximumCartDiscount}
+                    step="0.01"
+                    value={cartDiscount}
+                    onChange={(event) => setCartDiscount(Math.min(Math.max(Number(event.target.value), 0), maximumCartDiscount))}
+                    placeholder="Enter discount amount"
+                  />
+                </div>
+              </div>
 
-              <div className="space-y-2 text-sm">
+              <Button type="button" size="sm" variant="ghost" className="pos-note-toggle w-full justify-between" onClick={() => setShowSaleNotes((visible) => !visible)}>
+                <span>{showSaleNotes ? 'Hide Sale Note' : '+ Add Sale Note'}{saleNotes && !showSaleNotes ? ' · Added' : ''}</span>
+                <ChevronDown size={15} className={`transition-transform ${showSaleNotes ? 'rotate-180' : ''}`} />
+              </Button>
+              {showSaleNotes && <Textarea rows={2} className="pos-sale-notes" placeholder="Sale notes" value={saleNotes} onChange={(event) => setSaleNotes(event.target.value)} />}
+
+              <div className="pos-totals space-y-1 text-sm">
                 <div className="flex items-center justify-between text-dashboard-text-sub">
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
@@ -782,7 +801,7 @@ export function POS() {
                     <span>{formatCurrency(cardPaymentFee)}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between border-t border-white/10 pt-3 text-base font-semibold text-dashboard-text-primary">
+                <div className="flex items-center justify-between border-t border-white/10 pt-2 text-base font-semibold text-dashboard-text-primary">
                   <span>Grand Total</span>
                   <span>{formatCurrency(grandTotal)}</span>
                 </div>
@@ -800,7 +819,7 @@ export function POS() {
                 )}
               </div>
 
-              <Button className="w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0 || isCompletingSale}>
+              <Button className="pos-complete-sale min-h-11 w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0 || isCompletingSale}>
                 <CreditCard size={16} />
                 {isCompletingSale ? 'Completing Sale…' : 'Complete Sale'}
               </Button>

@@ -1,197 +1,149 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Plus } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import type { ProductVariant, Product } from '../types';
-import * as productService from '../services/productService';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Eye, FileSpreadsheet, PackageOpen, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import * as inventoryService from '../services/inventoryService';
+import * as productService from '../services/productService';
+import type { InventoryProductSummary } from '../services/inventoryService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
-import {
-  Alert,
-  Button,
-  DataTable,
-  Input,
-  LoadingSpinner,
-  Modal,
-  PageHeader,
-  Select,
-  Textarea,
-} from '../components/ui';
+import { Alert, Button, DataTable, Input, LoadingSpinner, PageHeader } from '../components/ui';
 
-interface VariantWithProduct extends ProductVariant {
-  product: Product & {
-    category?: { name: string } | null;
-    brand?: { name: string } | null;
-  };
-}
-
-interface AdjustmentFormInputs {
-  variant_id: string;
-  change_type: 'add' | 'remove';
-  quantity: number;
-  reason: string;
+function stockStatus(stock: number) {
+  if (stock <= 0) return { label: 'Out of Stock', className: 'bg-red-500/20 text-red-300' };
+  if (stock < 10) return { label: 'Low Stock', className: 'bg-yellow-500/20 text-yellow-300' };
+  return { label: 'In Stock', className: 'bg-green-500/20 text-green-300' };
 }
 
 export function Inventory() {
-  const [variants, setVariants] = useState<VariantWithProduct[]>([]);
+  const navigate = useNavigate();
+  const [products, setProducts] = useState<InventoryProductSummary[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<AdjustmentFormInputs>();
 
   const fetchInventory = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: fetchError } = await productService.getAllProductVariants();
-    if (fetchError) {
-      setError(getErrorMessage(fetchError));
-    } else {
-      setVariants((data as VariantWithProduct[]) ?? []);
-    }
+    const result = await inventoryService.getInventoryProducts();
+    if (result.error) setError(getErrorMessage(result.error));
+    else setProducts(result.data);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchInventory();
+    void fetchInventory();
   }, [fetchInventory]);
 
-  const closeModal = () => {
-    setShowModal(false);
-    reset();
-  };
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter((product) =>
+      [product.item_number, product.code, product.name, product.category?.name, product.brand?.name]
+        .some((value) => value?.toLowerCase().includes(term))
+    );
+  }, [products, search]);
 
-  const onSubmit = async (data: AdjustmentFormInputs) => {
-    setError(null);
-    try {
-      await inventoryService.adjustStock(
-        data.variant_id,
-        data.change_type,
-        data.quantity,
-        data.reason
-      );
-      closeModal();
-      fetchInventory();
-    } catch (err) {
-      setError(getErrorMessage(err));
+  const handleDelete = async (product: InventoryProductSummary) => {
+    if (!confirm(`Delete ${product.name}? This also removes its variants and inventory matrix.`)) return;
+    const result = await productService.deleteProduct(product.id);
+    if (result.error) {
+      setError(getErrorMessage(result.error));
+      return;
     }
-  };
-
-  const getStockStatus = (stock: number) => {
-    if (stock <= 0) return { label: 'Out of Stock', class: 'bg-red-500/20 text-red-300' };
-    if (stock < 10) return { label: 'Low Stock', class: 'bg-yellow-500/20 text-yellow-300' };
-    return { label: 'Available', class: 'bg-green-500/20 text-green-300' };
+    void fetchInventory();
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Inventory"
-        description="Manage your inventory stock levels"
-        action={
-          <Button onClick={() => setShowModal(true)}>
-            <Plus size={20} />
-            Adjust Stock
-          </Button>
-        }
+        description="One summary row per product. Open a product to manage its size × colour stock matrix."
       />
 
       {error && <Alert message={error} />}
+
+      <section className="glass-card p-4">
+        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-dashboard-accent/15 p-2.5 text-dashboard-accent">
+              <PackageOpen size={20} />
+            </span>
+            <div>
+              <p className="font-semibold text-dashboard-text-primary">Product Inventory</p>
+              <p className="text-xs text-dashboard-text-sub">{filteredProducts.length} main products</p>
+            </div>
+          </div>
+          <Input
+            aria-label="Search inventory products"
+            className="sm:max-w-xs"
+            placeholder="Search code, product, category or brand"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+      </section>
 
       {loading ? (
         <LoadingSpinner />
       ) : (
         <DataTable
           columns={[
+            { key: 'code', header: 'Code' },
             { key: 'product', header: 'Product' },
-            { key: 'size', header: 'Size' },
-            { key: 'color', header: 'Color' },
-            { key: 'stock', header: 'Current Stock' },
+            { key: 'category', header: 'Category' },
+            { key: 'brand', header: 'Brand' },
             { key: 'cost', header: 'Cost Price' },
             { key: 'price', header: 'Selling Price' },
+            { key: 'stock', header: 'Total Stock' },
             { key: 'value', header: 'Stock Value' },
             { key: 'status', header: 'Status' },
+            { key: 'actions', header: 'Actions', className: 'text-right' },
           ]}
-          isEmpty={variants.length === 0}
-          emptyMessage="No inventory items found"
+          isEmpty={filteredProducts.length === 0}
+          emptyMessage={search ? 'No products match your search' : 'No products found'}
         >
-          {variants.map((variant) => {
-            const status = getStockStatus(variant.stock_quantity);
-            const stockValue = variant.stock_quantity * variant.cost_price;
+          {filteredProducts.map((product) => {
+            const status = stockStatus(product.total_stock);
             return (
-              <tr key={variant.id} className="hover:bg-dashboard-hover">
-                <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">
-                  {variant.product.name}
+              <tr
+                key={product.id}
+                className="cursor-pointer hover:bg-dashboard-hover"
+                onClick={() => navigate(`/inventory/${product.id}`)}
+              >
+                <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">
+                  {product.item_number || product.code}
                 </td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.size}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.color}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-primary">{variant.stock_quantity}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.cost_price)}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.selling_price)}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-primary">{formatCurrency(stockValue)}</td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.class}`}>
-                    {status.label}
-                  </span>
+                <td className="min-w-48 px-4 py-4 xl:px-6">
+                  <p className="text-sm font-medium text-dashboard-text-primary">{product.name}</p>
+                  <p className="max-w-56 truncate text-xs text-dashboard-text-sub">{product.description || '—'}</p>
+                </td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.category?.name || '—'}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.brand?.name || '—'}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{formatCurrency(product.base_cost_price)}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-dashboard-text-primary xl:px-6">{formatCurrency(product.base_selling_price)}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">{product.total_stock}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-primary xl:px-6">{formatCurrency(product.stock_value)}</td>
+                <td className="whitespace-nowrap px-4 py-4 xl:px-6">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>{status.label}</span>
+                </td>
+                <td className="whitespace-nowrap px-4 py-4 text-right xl:px-6" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" title="Open Inventory Matrix" onClick={() => navigate(`/inventory/${product.id}`)}>
+                      <FileSpreadsheet size={17} />
+                      <span className="hidden 2xl:inline">Open Matrix</span>
+                    </Button>
+                    <Button size="sm" variant="ghost" title="View Product Details" onClick={() => navigate(`/products/${product.id}`)}>
+                      <Eye size={17} />
+                    </Button>
+                    <Button size="sm" variant="ghost" title="Delete Product" className="text-red-400 hover:text-red-300" onClick={() => void handleDelete(product)}>
+                      <Trash2 size={17} />
+                    </Button>
+                  </div>
                 </td>
               </tr>
             );
           })}
         </DataTable>
-      )}
-
-      {showModal && (
-        <Modal title="Adjust Stock" onClose={closeModal} size="md">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <Select
-              id="variant_id"
-              label="Product Variant"
-              error={errors.variant_id?.message}
-              {...register('variant_id', { required: 'Variant is required' })}
-            >
-              <option value="">Select a variant</option>
-              {variants.map((variant) => (
-                <option key={variant.id} value={variant.id}>
-                  {variant.product.name} - {variant.size} / {variant.color}
-                </option>
-              ))}
-            </Select>
-
-            <Select
-              id="change_type"
-              label="Adjustment Type"
-              error={errors.change_type?.message}
-              {...register('change_type', { required: 'Type is required' })}
-            >
-              <option value="add">Add Stock</option>
-              <option value="remove">Remove Stock</option>
-            </Select>
-
-            <Input
-              id="quantity"
-              type="number"
-              label="Quantity"
-              error={errors.quantity?.message}
-              {...register('quantity', { required: 'Quantity is required', min: 1 })}
-            />
-
-            <Textarea
-              id="reason"
-              label="Reason"
-              rows={3}
-              placeholder="e.g., Damaged, Lost, Manual Correction"
-              {...register('reason')}
-            />
-
-            <div className="flex gap-3 pt-4">
-              <Button type="button" variant="secondary" className="flex-1" onClick={closeModal}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting} className="flex-1">
-                {isSubmitting ? 'Saving...' : 'Adjust'}
-              </Button>
-            </div>
-          </form>
-        </Modal>
       )}
     </div>
   );

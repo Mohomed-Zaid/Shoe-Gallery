@@ -31,6 +31,8 @@ export interface Product {
   brand_id: string | null;
   description: string | null;
   image_url: string | null;
+  base_cost_price?: number | null;
+  base_selling_price?: number | null;
   created_at: string;
 }
 

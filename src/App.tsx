@@ -12,6 +12,7 @@ import { Products } from './pages/Products';
 import { ProductDetail } from './pages/ProductDetail';
 import { Suppliers } from './pages/Suppliers';
 import { Inventory } from './pages/Inventory';
+import { InventorySheetPage } from './pages/InventorySheetPage';
 import { Purchases } from './pages/Purchases';
 import { CreatePurchase } from './pages/CreatePurchase';
 import { PurchaseDetail } from './pages/PurchaseDetail';
@@ -64,6 +65,7 @@ function App() {
                       <Route path="/purchases/:id/edit" element={<ProtectedRoute allowedRoles={['admin']}><CreatePurchase /></ProtectedRoute>} />
                       <Route path="/purchases/:id" element={<ProtectedRoute allowedRoles={['admin']}><PurchaseDetail /></ProtectedRoute>} />
                       <Route path="/inventory" element={<ProtectedRoute allowedRoles={['admin']}><Inventory /></ProtectedRoute>} />
+                      <Route path="/inventory/:productId" element={<ProtectedRoute allowedRoles={['admin']}><InventorySheetPage /></ProtectedRoute>} />
                       <Route path="/customers" element={<Customers />} />
                       <Route path="/customers/:id" element={<CustomerDetail />} />
                       <Route path="/pos" element={<CashRegisterGuard><POS /></CashRegisterGuard>} />
