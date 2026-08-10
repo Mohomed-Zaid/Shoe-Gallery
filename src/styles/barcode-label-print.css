@@ -17,36 +17,28 @@
   height: 3.4mm;
   align-items: center;
   justify-content: center;
-  gap: 0.7mm;
+  gap: 0.9mm;
   overflow: hidden;
   padding: 0 0.8mm;
   box-sizing: border-box;
   color: #000 !important;
+  font-size: 2.05mm;
+  font-weight: 800;
+  letter-spacing: 0.03mm;
   line-height: 3.4mm;
   white-space: nowrap;
 }
 
-.barcode-store-name {
+.barcode-label-header > span {
   min-width: 0;
-  overflow: hidden;
   color: #000 !important;
-  font-size: 1.35mm;
   font-weight: 800;
-  letter-spacing: 0.04mm;
-  text-transform: uppercase;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.barcode-article-number {
-  min-width: 0;
+.barcode-heading-article {
   overflow: hidden;
-  color: #000 !important;
-  font-size: 1.35mm;
-  font-weight: 800;
-  letter-spacing: 0.02mm;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .barcode-label-body {
@@ -158,8 +150,7 @@
   white-space: nowrap;
 }
 
-.barcode-density-extra-dark .barcode-store-name,
-.barcode-density-extra-dark .barcode-article-number,
+.barcode-density-extra-dark .barcode-label-header,
 .barcode-density-extra-dark .barcode-selling-price,
 .barcode-density-extra-dark .barcode-label-price,
 .barcode-density-extra-dark .barcode-meta-row {

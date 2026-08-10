@@ -164,8 +164,9 @@ export function BarcodePrinting() {
     try {
       const printResult = printBarcodeLabels(selectedBarcode, {
         copies,
-        storeName: printerSettings?.store_name || 'SHOE GALLERY',
-        articleNumber: selectedVariant.product?.item_article || selectedVariant.product?.item_number || selectedVariant.product?.code,
+        articleNumber: selectedVariant.product?.item_article || undefined,
+        colour: selectedVariant.color,
+        size: selectedVariant.size,
         sellingPrice: Number(selectedVariant.selling_price),
         costPrice: selectedVariant.cost_price,
         density: getBarcodePrintDensity(),
@@ -327,8 +328,9 @@ export function BarcodePrinting() {
             <div className="barcode-label-preview">
               <BarcodeLabel
                 barcodeNumber={selectedBarcode}
-                articleNumber={selectedVariant?.product?.item_article || selectedVariant?.product?.item_number || selectedVariant?.product?.code}
-                storeName={printerSettings?.store_name || 'SHOE GALLERY'}
+                articleNumber={selectedVariant.product?.item_article || undefined}
+                colour={selectedVariant.color}
+                size={selectedVariant.size}
                 sellingPrice={Number(selectedVariant.selling_price)}
                 costPrice={selectedVariant.cost_price}
               />

@@ -2,6 +2,7 @@ import JsBarcode from 'jsbarcode';
 import barcodeLabelCss from '../styles/barcode-label-print.css?inline';
 import { formatBarcodeLabelPrice } from '../utils/format';
 import { encodeCostPrice } from '../utils/costCode';
+import { getColourShortName } from '../utils/colour';
 
 export interface BarcodeLabelPrintOptions {
   copies?: number;
@@ -10,7 +11,8 @@ export interface BarcodeLabelPrintOptions {
   barcodeWidth?: number;
   barcodeHeight?: number;
   articleNumber?: string;
-  storeName?: string;
+  colour?: string;
+  size?: string;
   sellingPrice?: number;
   costPrice?: number | string;
   density?: BarcodePrintDensity;
@@ -251,11 +253,10 @@ export async function printBarcodeLabels(
 
   const copies = normaliseCopies(options.copies);
   const escapedNumber = escapeHtml(value);
-  const escapedStoreName = escapeHtml(options.storeName?.trim() || 'SHOE GALLERY');
   const escapedArticleNumber = escapeHtml(options.articleNumber?.trim() || '');
-  const articleMarkup = escapedArticleNumber
-    ? `<span class="barcode-article-number">Article: ${escapedArticleNumber}</span>`
-    : '';
+  const escapedColour = escapeHtml(getColourShortName(options.colour));
+  const escapedSize = escapeHtml(options.size?.trim() || '');
+  const headingMarkup = `<span class="barcode-heading-article">${escapedArticleNumber}</span><span>${escapedColour}</span><span>${escapedSize}</span>`;
   const escapedSellingPrice = escapeHtml(formatBarcodeLabelPrice(sellingPrice));
   const costCode = options.costPrice == null ? '' : encodeCostPrice(options.costPrice);
   const escapedCostCode = escapeHtml(costCode);
@@ -266,7 +267,7 @@ export async function printBarcodeLabels(
   const labels = Array.from(
     { length: copies },
     () =>
-      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-label-header"><span class="barcode-store-name">${escapedStoreName}</span>${articleMarkup}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-meta-row"><span class="barcode-number">${escapedNumber}</span>${costCodeMarkup}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`,
+      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-label-header">${headingMarkup}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-meta-row"><span class="barcode-number">${escapedNumber}</span>${costCodeMarkup}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`,
   ).join('');
   const horizontalOffset = boundedNumber(options.horizontalOffsetMm, 0, -3, 3);
   const verticalOffset = boundedNumber(options.verticalOffsetMm, 0, -3, 3);

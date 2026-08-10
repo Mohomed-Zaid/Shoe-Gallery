@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Eye, Plus, Trash2 } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import type { ProductVariant } from '../types';
 import type { InventoryMatrixProduct } from '../services/inventoryService';
 import * as inventoryService from '../services/inventoryService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
-import { Alert, Button, LoadingSpinner, PageHeader } from '../components/ui';
+import { Alert, Button, LoadingSpinner, Modal, PageHeader } from '../components/ui';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -43,6 +43,7 @@ export function InventorySheetPage() {
   const [changingDimension, setChangingDimension] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const pendingSaves = useRef(0);
 
   const loadMatrix = useCallback(async (showLoader = true) => {
@@ -239,7 +240,14 @@ export function InventorySheetPage() {
                       details ? `Selling: ${formatCurrency(details.selling_price)}` : null,
                     ].filter(Boolean).join('\n');
                     return (
-                      <td key={normalize(size)} className={`inventory-matrix-cell ${stockTone(quantity)}`} title={title}>
+                      <td
+                        key={normalize(size)}
+                        className={`inventory-matrix-cell relative ${stockTone(quantity)} ${details ? 'cursor-pointer' : ''}`}
+                        title={title}
+                        onClick={(event) => {
+                          if (details && event.target === event.currentTarget) setSelectedVariant(details);
+                        }}
+                      >
                         <input
                           aria-label={`${colour}, size ${size}, stock quantity`}
                           type="number"
@@ -258,6 +266,17 @@ export function InventorySheetPage() {
                           onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
                           className="h-12 w-24 bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none"
                         />
+                        {details && (
+                          <button
+                            type="button"
+                            title={`View details for ${colour}, size ${size}`}
+                            aria-label={`View details for ${colour}, size ${size}`}
+                            onClick={() => setSelectedVariant(details)}
+                            className="absolute right-0.5 top-0.5 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-800"
+                          >
+                            <Eye size={11} />
+                          </button>
+                        )}
                       </td>
                     );
                   })}
@@ -275,6 +294,21 @@ export function InventorySheetPage() {
           )}
         </div>
       </section>
+
+      {selectedVariant && (
+        <Modal title="Variant Details" onClose={() => setSelectedVariant(null)}>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div><dt className="text-dashboard-text-label">Product</dt><dd className="font-semibold text-dashboard-text-primary">{product.name}</dd></div>
+            <div><dt className="text-dashboard-text-label">Article Number</dt><dd className="font-semibold text-dashboard-text-primary">{product.item_article || product.item_number || product.code}</dd></div>
+            <div><dt className="text-dashboard-text-label">Size</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.size}</dd></div>
+            <div><dt className="text-dashboard-text-label">Colour</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.color}</dd></div>
+            <div><dt className="text-dashboard-text-label">Stock</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.stock_quantity}</dd></div>
+            <div><dt className="text-dashboard-text-label">Barcode Number</dt><dd className="font-semibold text-sky-300">{selectedVariant.barcode_number || '—'}</dd></div>
+            <div><dt className="text-dashboard-text-label">Cost Price</dt><dd className="font-semibold text-dashboard-text-primary">{formatCurrency(selectedVariant.cost_price)}</dd></div>
+            <div><dt className="text-dashboard-text-label">Selling Price</dt><dd className="font-semibold text-dashboard-text-primary">{formatCurrency(selectedVariant.selling_price)}</dd></div>
+          </dl>
+        </Modal>
+      )}
     </div>
   );
 }

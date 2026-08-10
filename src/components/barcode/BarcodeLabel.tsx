@@ -7,11 +7,13 @@ import {
 import '../../styles/barcode-label-print.css';
 import { formatBarcodeLabelPrice } from '../../utils/format';
 import { encodeCostPrice } from '../../utils/costCode';
+import { getColourShortName } from '../../utils/colour';
 
 export interface BarcodeLabelProps {
   barcodeNumber: string;
   articleNumber?: string;
-  storeName?: string;
+  colour?: string;
+  size?: string;
   sellingPrice: number;
   costPrice?: number | string;
   density?: BarcodePrintDensity;
@@ -20,7 +22,8 @@ export interface BarcodeLabelProps {
 export function BarcodeLabel({
   barcodeNumber,
   articleNumber,
-  storeName = 'SHOE GALLERY',
+  colour,
+  size,
   sellingPrice,
   costPrice,
   density = getBarcodePrintDensity(),
@@ -42,8 +45,9 @@ export function BarcodeLabel({
   return (
     <div className={`barcode-label barcode-density-${density}`}>
       <div className="barcode-label-header">
-        <span className="barcode-store-name">{storeName.trim() || 'SHOE GALLERY'}</span>
-        {articleNumber && <span className="barcode-article-number">Article: {articleNumber}</span>}
+        <span className="barcode-heading-article">{articleNumber}</span>
+        <span>{getColourShortName(colour)}</span>
+        <span>{size}</span>
       </div>
       <div className="barcode-label-body">
         <div className="barcode-label-main">
