@@ -17,7 +17,6 @@ export interface BarcodeLabelProps {
 
 export function BarcodeLabel({
   barcodeNumber,
-  itemNumber,
   storeName = 'SHOE GALLERY',
   sellingPrice,
   density = getBarcodePrintDensity(),
@@ -44,11 +43,8 @@ export function BarcodeLabel({
             <svg ref={svgRef} className="barcode-svg" aria-hidden="true" />
           </div>
           <div className="barcode-number">{barcodeNumber}</div>
-          <div className="barcode-item-number">
-            {(itemNumber?.trim() || barcodeNumber)} - EACH
-          </div>
+          <div className="barcode-label-price">{formatBarcodeLabelPrice(sellingPrice)}</div>
         </div>
-        <div className="barcode-selling-price">{formatBarcodeLabelPrice(sellingPrice)}</div>
       </div>
     </div>
   );

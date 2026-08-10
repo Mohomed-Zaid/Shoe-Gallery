@@ -249,14 +249,13 @@ export async function printBarcodeLabels(
 
   const copies = normaliseCopies(options.copies);
   const escapedNumber = escapeHtml(value);
-  const escapedItemNumber = escapeHtml(options.itemNumber?.trim() || value);
   const escapedStoreName = escapeHtml(options.storeName?.trim() || 'SHOE GALLERY');
   const escapedSellingPrice = escapeHtml(formatBarcodeLabelPrice(sellingPrice));
   const density = options.density ?? getBarcodePrintDensity();
   const labels = Array.from(
     { length: copies },
     () =>
-      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-store-name">${escapedStoreName}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-number">${escapedNumber}</div><div class="barcode-item-number">${escapedItemNumber} - EACH</div></div><div class="barcode-selling-price">${escapedSellingPrice}</div></div></div></section>`,
+      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-store-name">${escapedStoreName}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-number">${escapedNumber}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`,
   ).join('');
   const horizontalOffset = boundedNumber(options.horizontalOffsetMm, 0, -3, 3);
   const verticalOffset = boundedNumber(options.verticalOffsetMm, 0, -3, 3);
