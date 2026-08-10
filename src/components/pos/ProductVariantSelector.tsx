@@ -57,7 +57,7 @@ export function ProductVariantSelector({ product, cartQuantities, lowStockLimit,
         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-dashboard-accent/15 sm:h-16 sm:w-16">
           {product.image_url ? <img src={product.image_url} alt="" className="h-full w-full object-cover"/> : <ImageIcon className="text-dashboard-text-sub"/>}
         </div>
-        <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{product.item_number || product.code}</p><h2 className="text-xl font-bold text-dashboard-text-primary">{product.name}</h2><p className="text-sm text-dashboard-text-sub">{product.brand?.name || 'Unbranded'} · {product.category?.name || 'Uncategorized'}</p></div>
+        <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wider text-sky-300">{product.item_number || product.code}</p><h2 className="text-xl font-bold text-dashboard-text-primary">{product.name}</h2>{product.item_article && <p className="text-sm text-dashboard-text-sub">Article: {product.item_article}</p>}<p className="text-sm text-dashboard-text-sub">{product.brand?.name || 'Unbranded'} · {product.category?.name || 'Uncategorized'}</p></div>
         <div className="text-right"><p className="font-semibold">From {formatCurrency(basePrice)}</p><p className="text-sm text-emerald-300">{totalStock} total available</p></div>
       </header>
 

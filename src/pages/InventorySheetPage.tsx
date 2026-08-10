@@ -177,9 +177,10 @@ export function InventorySheetPage() {
       {error && <Alert message={error} />}
 
       <section className="glass-card p-4 sm:p-5">
-        <div className="relative z-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <div className="relative z-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Product</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.name}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Code</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.item_number || product.code}</p></div>
+          <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Article</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.item_article || '-'}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Category</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.category?.name || '—'}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Brand</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.brand?.name || '—'}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Base Cost</p><p className="mt-1 font-semibold text-dashboard-text-primary">{formatCurrency(baseCostPrice)}</p></div>

@@ -113,7 +113,7 @@ export function POSItemNumberInput({ inputRef, onSelect, onError }: Props) {
             <button key={product.id} type="button" role="option" aria-selected={index === activeIndex}
               onMouseDown={(event) => event.preventDefault()} onClick={() => void loadProduct(product.id)}
               className={`flex w-full items-center justify-between gap-4 rounded-lg p-3 text-left ${index === activeIndex ? 'bg-dashboard-accent/20' : 'hover:bg-white/[.06]'}`}>
-              <span><strong className="block text-sm text-dashboard-text-primary">{product.item_number || product.code} · {product.name}</strong><small className="text-dashboard-text-sub">{product.brand?.name || 'Unbranded'} · {product.category?.name || 'Uncategorized'}</small></span>
+              <span><strong className="block text-sm text-dashboard-text-primary">{product.item_number || product.code} · {product.name}</strong><small className="text-dashboard-text-sub">{product.item_article ? `Article: ${product.item_article} · ` : ''}{product.brand?.name || 'Unbranded'} · {product.category?.name || 'Uncategorized'}</small></span>
               <span className="whitespace-nowrap text-xs text-emerald-300">{product.total_stock} in stock</span>
             </button>
           ))}

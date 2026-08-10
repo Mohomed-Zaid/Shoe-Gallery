@@ -4,6 +4,7 @@ import type { Brand, Category, InventoryHistory, Product, ProductVariant } from 
 export interface InventoryProductSummary extends Product {
   category: Category | null;
   brand: Brand | null;
+  product_variants: ProductVariant[];
   base_cost_price: number;
   base_selling_price: number;
   total_stock: number;
@@ -72,6 +73,7 @@ export async function getInventoryProducts(): Promise<{ data: InventoryProductSu
 
     return {
       ...product,
+      product_variants: variants,
       base_cost_price: baseCost,
       base_selling_price: baseSelling,
       total_stock: variants.reduce((sum, variant) => sum + Math.max(Number(variant.stock_quantity), 0), 0),

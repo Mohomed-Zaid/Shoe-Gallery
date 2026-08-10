@@ -10,7 +10,7 @@ export function PurchaseItemRow({ item, variant, onChange, onRemove }: {
 }) {
   const lineTotal = Math.max(0, item.quantity * item.cost_price - item.line_discount);
   return <tr className="border-t border-white/10">
-    <td className="min-w-48 px-3 py-3"><p className="font-medium text-dashboard-text-primary">{variant.product.name}</p><p className="text-xs text-dashboard-text-sub">{variant.barcode_number || 'No barcode'}</p></td>
+    <td className="min-w-48 px-3 py-3"><p className="font-medium text-dashboard-text-primary">{variant.product.name}</p>{variant.product.item_article && <p className="text-xs text-dashboard-text-sub">Article: {variant.product.item_article}</p>}<p className="text-xs text-dashboard-text-sub">{variant.barcode_number || 'No barcode'}</p></td>
     <td className="px-3 py-3 text-sm text-dashboard-text-sub">{variant.size}</td>
     <td className="px-3 py-3 text-sm text-dashboard-text-sub">{variant.color}</td>
     <td className="px-3 py-3 text-sm text-dashboard-text-sub">{variant.stock_quantity}</td>

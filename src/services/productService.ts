@@ -33,9 +33,7 @@ export async function getProductById(id: string) {
   return supabase.from('products').select('*').eq('id', id).maybeSingle();
 }
 
-export type CreateProductInput = Omit<Product, 'id' | 'created_at' | 'code' | 'item_number'>;
-
-export async function createProduct(data: CreateProductInput) {
+export async function createProduct(data: Omit<Product, 'id' | 'created_at'>) {
   return supabase.from('products').insert(data).select().single();
 }
 
@@ -107,7 +105,7 @@ export async function searchPOSProducts(query: string, limit = 8) {
       .from('products')
       .select('*,category:categories(*),brand:brands(*),product_variants(stock_quantity,is_active)')
       .eq('is_active', true)
-      .or(`item_number.ilike.%${term}%,name.ilike.%${term}%`)
+      .or(`item_number.ilike.%${term}%,code.ilike.%${term}%,name.ilike.%${term}%,item_article.ilike.%${term}%`)
       .limit(limit),
     supabase
       .from('product_variants')
@@ -166,18 +164,27 @@ export async function searchVariants(query: string) {
   const lowerQuery = normalizedQuery.toLowerCase();
   const filtered = (data ?? []).filter((variant: ProductVariant & { product: Product | null }) => {
     const productName = variant.product?.name?.toLowerCase() ?? '';
+    const productCode = (variant.product?.item_number || variant.product?.code || '').toLowerCase();
+    const itemArticle = variant.product?.item_article?.toLowerCase() ?? '';
     const barcode = variant.barcode_number?.toLowerCase() ?? '';
-    return productName.includes(lowerQuery) || barcode.includes(lowerQuery);
+    return productName.includes(lowerQuery)
+      || productCode.includes(lowerQuery)
+      || itemArticle.includes(lowerQuery)
+      || barcode.includes(lowerQuery);
   });
 
   return { data: filtered, error: null };
 }
 
-export async function createVariant(data: Omit<ProductVariant, 'id' | 'created_at'>) {
+export type CreateVariantInput = Omit<ProductVariant, 'id' | 'created_at' | 'barcode_number'> & {
+  barcode_number?: string | null;
+};
+
+export async function createVariant(data: CreateVariantInput) {
   return supabase.from('product_variants').insert(data);
 }
 
-export async function updateVariant(id: string, data: Partial<Omit<ProductVariant, 'id' | 'created_at' | 'product_id'>>) {
+export async function updateVariant(id: string, data: Partial<Omit<ProductVariant, 'id' | 'created_at' | 'product_id' | 'barcode_number'>>) {
   return supabase.from('product_variants').update(data).eq('id', id);
 }
 

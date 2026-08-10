@@ -21,6 +21,8 @@ import {
 } from '../components/ui';
 
 interface ProductFormInputs {
+  product_code: string;
+  item_article: string;
   name: string;
   category_id: string;
   brand_id: string;
@@ -73,6 +75,7 @@ export function Products() {
       const payload = {
         is_active: true,
         name: data.name,
+        item_article: data.item_article.trim() || null,
         category_id: data.category_id || null,
         brand_id: data.brand_id || null,
         description: data.description || null,
@@ -83,10 +86,14 @@ export function Products() {
         const { error: updateError } = await productService.updateProduct(editingId, payload);
         if (updateError) throw updateError;
       } else {
-        const { error: createError } = await productService.createProduct(payload);
+        const productCode = data.product_code.trim();
+        const { error: createError } = await productService.createProduct({
+          ...payload,
+          code: productCode,
+          item_number: productCode,
+        });
         if (createError) {
-          console.error('Automatic product code generation failed:', createError);
-          setError('Unable to generate product code. Please try again.');
+          setError(getErrorMessage(createError, 'Unable to create product'));
           return;
         }
       }
@@ -101,6 +108,8 @@ export function Products() {
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     reset({
+      product_code: product.item_number || product.code,
+      item_article: product.item_article || '',
       name: product.name,
       category_id: product.category_id || '',
       brand_id: product.brand_id || '',
@@ -141,6 +150,7 @@ export function Products() {
           columns={[
             { key: 'code', header: 'Code' },
             { key: 'product', header: 'Product' },
+            { key: 'article', header: 'Article' },
             { key: 'category', header: 'Category' },
             { key: 'brand', header: 'Brand' },
             { key: 'created', header: 'Created At' },
@@ -159,6 +169,9 @@ export function Products() {
                   <div className="text-sm font-medium text-dashboard-text-primary">{product.name}</div>
                   <div className="text-sm text-dashboard-text-sub">{product.description || '-'}</div>
                 </div>
+              </td>
+              <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-sub">
+                {product.item_article || '-'}
               </td>
               <td className="whitespace-nowrap px-6 py-4 text-sm text-dashboard-text-sub">
                 {categories.find((c) => c.id === product.category_id)?.name || '-'}
@@ -186,18 +199,29 @@ export function Products() {
       {showModal && (
         <Modal title={editingId ? 'Edit Product' : 'Add Product'} onClose={closeModal} size="lg">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div>
-              <span className="mb-1 block text-sm font-medium text-dashboard-text-label">Product Code</span>
-              <div className="rounded-lg border border-white/10 bg-white/[.04] px-3 py-2.5 text-sm text-dashboard-text-primary">
-                {editingId
-                  ? products.find((product) => product.id === editingId)?.item_number || products.find((product) => product.id === editingId)?.code
-                  : 'Will be generated automatically'}
+            {editingId ? (
+              <div>
+                <span className="mb-1 block text-sm font-medium text-dashboard-text-label">Product Code</span>
+                <div className="rounded-lg border border-white/10 bg-white/[.04] px-3 py-2.5 text-sm text-dashboard-text-primary">
+                  {products.find((product) => product.id === editingId)?.item_number
+                    || products.find((product) => product.id === editingId)?.code}
+                </div>
+                <p className="mt-1 text-xs text-dashboard-text-sub">The existing product code will be kept.</p>
               </div>
-              <p className="mt-1 text-xs text-dashboard-text-sub">
-                {editingId ? 'Product codes cannot be changed.' : 'The next sequential code is assigned when you create the product.'}
-              </p>
-            </div>
+            ) : (
+              <Input
+                id="product_code"
+                label="Product Code"
+                placeholder="e.g. SH-001"
+                error={errors.product_code?.message}
+                {...register('product_code', {
+                  required: 'Product code is required',
+                  pattern: { value: /^[A-Za-z0-9-]+$/, message: 'Use only letters, numbers, and hyphens' },
+                })}
+              />
+            )}
             <Input id="name" label="Name" error={errors.name?.message} {...register('name', { required: 'Name is required' })} />
+            <Input id="item_article" label="Item Article" placeholder="Enter item article" {...register('item_article')} />
             <Select id="category_id" label="Category" {...register('category_id')}>
               <option value="">Select a category</option>
               {categories.map((category) => (

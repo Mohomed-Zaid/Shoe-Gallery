@@ -25,6 +25,7 @@ export interface Product {
   id: string;
   code: string;
   item_number?: string;
+  item_article: string | null;
   is_active?: boolean;
   name: string;
   category_id: string | null;

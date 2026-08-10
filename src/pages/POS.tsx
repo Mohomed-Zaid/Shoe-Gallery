@@ -166,7 +166,9 @@ export function POS() {
       const query = search.toLowerCase();
       const matchesSearch =
         product.name.toLowerCase().includes(query) ||
-        product.code.toLowerCase().includes(query);
+        product.code.toLowerCase().includes(query) ||
+        product.item_number?.toLowerCase().includes(query) ||
+        product.item_article?.toLowerCase().includes(query);
       const matchesCategory = !categoryFilter || product.category_id === categoryFilter;
       return matchesSearch && matchesCategory;
     });
@@ -600,7 +602,7 @@ export function POS() {
 
           {showProductBrowser && <section className="space-y-4">
             <div className="glass-card grid gap-3 p-4 sm:grid-cols-[1fr_220px]">
-              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name, item number, or code" className="pl-10"/></div>
+              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name, code, or article" className="pl-10"/></div>
               <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

@@ -134,7 +134,7 @@ export function formatReportPeriod(filters: Pick<InvoiceSalesReportFilters, 'sta
 export async function getInvoiceSalesReportDetail(saleId: string): Promise<InvoiceSalesReportDetail> {
   const [saleResult, itemsResult, paymentsResult, returnsResult] = await Promise.all([
     supabase.from('sales').select('id,invoice_number,created_at,subtotal,discount_amount,total_amount,paid_amount,balance_due,change_due,payment_method,customer:customers(name,phone),cashier:profiles(full_name,email)').eq('id', saleId).single(),
-    supabase.from('sale_items').select('id,quantity,selling_price,discount_amount,line_total,product_name_snapshot,item_number_snapshot,barcode_number_snapshot,size_snapshot,color_snapshot,cost_price_at_sale,variant:product_variants(barcode_number,size,color,product:products(name,item_number))').eq('sale_id', saleId),
+    supabase.from('sale_items').select('id,quantity,selling_price,discount_amount,line_total,product_name_snapshot,item_number_snapshot,barcode_number_snapshot,size_snapshot,color_snapshot,cost_price_at_sale,variant:product_variants(barcode_number,size,color,product:products(name,item_number,item_article))').eq('sale_id', saleId),
     supabase.from('sale_payments').select('payment_method,amount').eq('sale_id', saleId),
     supabase.from('sales_returns').select('id,return_date,status,sales_return_items(id,product_name,size,colour,quantity_returned,return_total)').eq('sale_id', saleId).eq('status', 'completed').order('return_date'),
   ]);
@@ -158,12 +158,13 @@ export async function getInvoiceSalesReportDetail(saleId: string): Promise<Invoi
       id: string; quantity: number; selling_price: number; discount_amount: number; line_total: number;
       product_name_snapshot: string | null; item_number_snapshot: string | null; barcode_number_snapshot: string | null;
       size_snapshot: string | null; color_snapshot: string | null; cost_price_at_sale: number | null;
-      variant: { barcode_number: string | null; size: string; color: string; product: { name: string; item_number: string | null } | null } | null;
+      variant: { barcode_number: string | null; size: string; color: string; product: { name: string; item_number: string | null; item_article: string | null } | null } | null;
     };
     return {
       id: item.id,
       product: item.product_name_snapshot || item.variant?.product?.name || 'Instant item',
       itemNumber: item.item_number_snapshot || item.variant?.product?.item_number || '—',
+      itemArticle: item.variant?.product?.item_article || '—',
       barcode: item.barcode_number_snapshot || item.variant?.barcode_number || '—',
       size: item.size_snapshot || item.variant?.size || '—',
       colour: item.color_snapshot || item.variant?.color || '—',

@@ -58,6 +58,7 @@ export interface InvoiceDetailItem {
   id: string;
   product: string;
   itemNumber: string;
+  itemArticle: string;
   barcode: string;
   size: string;
   colour: string;
