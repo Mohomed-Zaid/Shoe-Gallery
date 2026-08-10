@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Hash, Search } from 'lucide-react';
 import { Input } from '../ui';
-import { getPOSProductById, getPOSProductByItemNumber, searchPOSProducts } from '../../services/productService';
+import { getPOSProductByArticleNumber, getPOSProductById, searchPOSProducts } from '../../services/productService';
 import type { POSProduct, POSProductSuggestion } from '../../services/productService';
 import { getErrorMessage } from '../../utils/errors';
 
@@ -55,7 +55,7 @@ export function POSItemNumberInput({ inputRef, onSelect, onError }: Props) {
     const query = value.trim();
     if (!query) return;
     setLoading(true);
-    const exact = await getPOSProductByItemNumber(query);
+    const exact = await getPOSProductByArticleNumber(query);
     setLoading(false);
     if (exact.error) {
       onError(getErrorMessage(exact.error));
@@ -71,18 +71,18 @@ export function POSItemNumberInput({ inputRef, onSelect, onError }: Props) {
     const result = await searchPOSProducts(query);
     if (result.error) onError(getErrorMessage(result.error));
     else if (result.data.length === 1) await loadProduct(result.data[0].id);
-    else if (!result.data.length) onError('Item number not found.');
+    else if (!result.data.length) onError('Article number not found.');
     else {
       setSuggestions(result.data);
       setActiveIndex(0);
-      onError('No exact item number found. Choose a matching product.');
+      onError('No exact article number found. Choose a matching product.');
     }
   };
 
   return (
     <div className="relative space-y-2">
       <label htmlFor="pos-item-number" className="flex items-center justify-between text-sm font-medium text-dashboard-text-label">
-        <span>Item Number</span><span className="text-xs font-normal">F2</span>
+        <span>Article Number</span><span className="text-xs font-normal">F2</span>
       </label>
       <div className="relative">
         <Input
@@ -101,7 +101,7 @@ export function POSItemNumberInput({ inputRef, onSelect, onError }: Props) {
               else void submit();
             }
           }}
-          placeholder="Type item number and press Enter"
+          placeholder="Type article number and press Enter"
           className="pl-10"
           disabled={loading}
         />
@@ -113,7 +113,7 @@ export function POSItemNumberInput({ inputRef, onSelect, onError }: Props) {
             <button key={product.id} type="button" role="option" aria-selected={index === activeIndex}
               onMouseDown={(event) => event.preventDefault()} onClick={() => void loadProduct(product.id)}
               className={`flex w-full items-center justify-between gap-4 rounded-lg p-3 text-left ${index === activeIndex ? 'bg-dashboard-accent/20' : 'hover:bg-white/[.06]'}`}>
-              <span><strong className="block text-sm text-dashboard-text-primary">{product.item_number || product.code} · {product.name}</strong><small className="text-dashboard-text-sub">{product.item_article ? `Article: ${product.item_article} · ` : ''}{product.brand?.name || 'Unbranded'} · {product.category?.name || 'Uncategorized'}</small></span>
+              <span><strong className="block text-sm text-dashboard-text-primary">{product.item_article || product.item_number || product.code} · {product.name}</strong><small className="text-dashboard-text-sub">{product.brand?.name || 'Unbranded'} · {product.category?.name || 'Uncategorized'}</small></span>
               <span className="whitespace-nowrap text-xs text-emerald-300">{product.total_stock} in stock</span>
             </button>
           ))}

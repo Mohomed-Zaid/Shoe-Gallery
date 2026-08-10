@@ -179,8 +179,7 @@ export function InventorySheetPage() {
       <section className="glass-card p-4 sm:p-5">
         <div className="relative z-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Product</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.name}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Code</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.item_number || product.code}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Article</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.item_article || '-'}</p></div>
+          <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Article Number</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.item_article || product.item_number || product.code}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Category</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.category?.name || '—'}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Brand</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.brand?.name || '—'}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Base Cost</p><p className="mt-1 font-semibold text-dashboard-text-primary">{formatCurrency(baseCostPrice)}</p></div>
@@ -201,8 +200,8 @@ export function InventorySheetPage() {
             <thead className="sticky top-0 z-30">
               <tr>
                 <th className="inventory-matrix-code sticky left-0 z-40 min-w-36">
-                  <span className="block text-[10px] uppercase tracking-widest text-white/55">Code No</span>
-                  <span className="mt-1 block text-sm">{product.item_number || product.code}</span>
+                  <span className="block text-[10px] uppercase tracking-widest text-white/55">Article No</span>
+                  <span className="mt-1 block text-sm">{product.item_article || product.item_number || product.code}</span>
                 </th>
                 {sizes.map((size) => (
                   <th key={normalize(size)} className="inventory-matrix-size min-w-24">

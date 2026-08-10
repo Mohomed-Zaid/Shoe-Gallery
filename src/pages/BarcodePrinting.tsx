@@ -17,6 +17,7 @@ interface VariantWithProduct extends ProductVariant {
     name: string;
     code: string;
     item_number?: string;
+    item_article: string | null;
   } | null;
 }
 
@@ -164,7 +165,7 @@ export function BarcodePrinting() {
       const printResult = printBarcodeLabels(selectedBarcode, {
         copies,
         storeName: printerSettings?.store_name || 'SHOE GALLERY',
-        itemNumber: selectedVariant.product?.item_number || selectedVariant.product?.code,
+        articleNumber: selectedVariant.product?.item_article || selectedVariant.product?.item_number || selectedVariant.product?.code,
         sellingPrice: Number(selectedVariant.selling_price),
         costPrice: selectedVariant.cost_price,
         density: getBarcodePrintDensity(),
@@ -326,7 +327,7 @@ export function BarcodePrinting() {
             <div className="barcode-label-preview">
               <BarcodeLabel
                 barcodeNumber={selectedBarcode}
-                itemNumber={selectedVariant?.product?.item_number || selectedVariant?.product?.code}
+                articleNumber={selectedVariant?.product?.item_article || selectedVariant?.product?.item_number || selectedVariant?.product?.code}
                 storeName={printerSettings?.store_name || 'SHOE GALLERY'}
                 sellingPrice={Number(selectedVariant.selling_price)}
                 costPrice={selectedVariant.cost_price}

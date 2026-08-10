@@ -19,6 +19,7 @@ import {
 } from '../components/ui';
 
 interface VariantFormInputs {
+  barcode_number: string;
   size: string;
   color: string;
   cost_price: number;
@@ -82,6 +83,7 @@ export function ProductDetail() {
     setError(null);
 
     const variantValues = {
+      barcode_number: data.barcode_number.trim() || null,
       size: data.size,
       color: data.color,
       cost_price: Number(data.cost_price),
@@ -105,6 +107,7 @@ export function ProductDetail() {
   const handleEditVariant = (variant: ProductVariant) => {
     setEditingVariantId(variant.id);
     reset({
+      barcode_number: variant.barcode_number || '',
       size: variant.size,
       color: variant.color,
       cost_price: variant.cost_price,
@@ -147,8 +150,7 @@ export function ProductDetail() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="glass-card p-6 lg:col-span-1">
           <h3 className="text-lg font-semibold text-dashboard-text-primary">{product.name}</h3>
-          <p className="mt-1 text-sm text-dashboard-text-sub">Code: {product.code}</p>
-          <p className="mt-1 text-sm text-dashboard-text-sub">Article: {product.item_article || '-'}</p>
+          <p className="mt-1 text-sm text-dashboard-text-sub">Article Number: {product.item_article || product.item_number || product.code}</p>
           <p className="mt-2 text-sm text-dashboard-text-sub">{product.description || 'No description'}</p>
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between">
@@ -214,19 +216,19 @@ export function ProductDetail() {
         <Modal title={editingVariantId ? 'Edit Variant' : 'Add Variant'} onClose={closeModal}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {error && <Alert message={error} />}
-            <div>
-              <span className="mb-1 block text-sm font-medium text-dashboard-text-label">Barcode Number</span>
-              <div className="rounded-lg border border-white/10 bg-white/[.04] px-3 py-2.5 text-sm text-dashboard-text-primary">
-                {editingVariantId
-                  ? variants.find((variant) => variant.id === editingVariantId)?.barcode_number || 'No barcode assigned'
-                  : 'Auto Generated'}
-              </div>
-              <p className="mt-1 text-xs text-dashboard-text-sub">
-                {editingVariantId
-                  ? 'The existing barcode will be kept.'
-                  : 'The next barcode will be assigned automatically.'}
-              </p>
-            </div>
+            <Input
+              id="barcode_number"
+              label="Barcode Number"
+              placeholder="Leave blank to generate automatically"
+              error={errors.barcode_number?.message}
+              {...register('barcode_number', {
+                validate: (value) => !value.trim() || /^[A-Za-z0-9._-]+$/.test(value.trim())
+                  || 'Use only letters, numbers, periods, underscores, and hyphens',
+              })}
+            />
+            <p className="-mt-3 text-xs text-dashboard-text-sub">
+              Barcode numbers must be unique. New variants get an automatic barcode when this is left blank.
+            </p>
             <Input id="size" label="Size" error={errors.size?.message} {...register('size', { required: 'Size is required' })} />
             <Input id="color" label="Color" error={errors.color?.message} {...register('color', { required: 'Color is required' })} />
             <Input id="cost_price" label="Cost Price" type="number" step="0.01" error={errors.cost_price?.message} {...register('cost_price', { required: 'Required', valueAsNumber: true })} />

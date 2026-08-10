@@ -10,7 +10,7 @@ import { encodeCostPrice } from '../../utils/costCode';
 
 export interface BarcodeLabelProps {
   barcodeNumber: string;
-  itemNumber?: string;
+  articleNumber?: string;
   storeName?: string;
   sellingPrice: number;
   costPrice?: number | string;
@@ -19,6 +19,7 @@ export interface BarcodeLabelProps {
 
 export function BarcodeLabel({
   barcodeNumber,
+  articleNumber,
   storeName = 'SHOE GALLERY',
   sellingPrice,
   costPrice,
@@ -40,7 +41,10 @@ export function BarcodeLabel({
 
   return (
     <div className={`barcode-label barcode-density-${density}`}>
-      <div className="barcode-store-name">{storeName.trim() || 'SHOE GALLERY'}</div>
+      <div className="barcode-label-header">
+        <span className="barcode-store-name">{storeName.trim() || 'SHOE GALLERY'}</span>
+        {articleNumber && <span className="barcode-article-number">Article: {articleNumber}</span>}
+      </div>
       <div className="barcode-label-body">
         <div className="barcode-label-main">
           <div className="barcode-svg-wrapper">

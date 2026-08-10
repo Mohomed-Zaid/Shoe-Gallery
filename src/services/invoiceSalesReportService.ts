@@ -163,7 +163,7 @@ export async function getInvoiceSalesReportDetail(saleId: string): Promise<Invoi
     return {
       id: item.id,
       product: item.product_name_snapshot || item.variant?.product?.name || 'Instant item',
-      itemNumber: item.item_number_snapshot || item.variant?.product?.item_number || '—',
+      itemNumber: item.variant?.product?.item_article || item.item_number_snapshot || '—',
       itemArticle: item.variant?.product?.item_article || '—',
       barcode: item.barcode_number_snapshot || item.variant?.barcode_number || '—',
       size: item.size_snapshot || item.variant?.size || '—',

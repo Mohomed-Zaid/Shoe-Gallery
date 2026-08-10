@@ -38,7 +38,7 @@ export function Inventory() {
     const term = search.trim().toLowerCase();
     if (!term) return products;
     return products.filter((product) =>
-      [product.item_number, product.code, product.name, product.item_article, product.category?.name, product.brand?.name]
+      [product.item_article, product.name, product.category?.name, product.brand?.name]
         .some((value) => value?.toLowerCase().includes(term))
       || product.product_variants.some((variant) => variant.barcode_number?.toLowerCase().includes(term))
     );
@@ -77,7 +77,7 @@ export function Inventory() {
           <Input
             aria-label="Search inventory products"
             className="sm:max-w-xs"
-            placeholder="Search product, code, article, or barcode"
+            placeholder="Search product, article number, or barcode"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -89,9 +89,8 @@ export function Inventory() {
       ) : (
         <DataTable
           columns={[
-            { key: 'code', header: 'Code' },
+            { key: 'article', header: 'Article Number' },
             { key: 'product', header: 'Product' },
-            { key: 'article', header: 'Article' },
             { key: 'category', header: 'Category' },
             { key: 'brand', header: 'Brand' },
             { key: 'cost', header: 'Cost Price' },
@@ -113,13 +112,12 @@ export function Inventory() {
                 onClick={() => navigate(`/inventory/${product.id}`)}
               >
                 <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">
-                  {product.item_number || product.code}
+                  {product.item_article || product.item_number || product.code}
                 </td>
                 <td className="min-w-48 px-4 py-4 xl:px-6">
                   <p className="text-sm font-medium text-dashboard-text-primary">{product.name}</p>
                   <p className="max-w-56 truncate text-xs text-dashboard-text-sub">{product.description || '—'}</p>
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.item_article || '-'}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.category?.name || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.brand?.name || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{formatCurrency(product.base_cost_price)}</td>

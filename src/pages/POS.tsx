@@ -166,9 +166,9 @@ export function POS() {
       const query = search.toLowerCase();
       const matchesSearch =
         product.name.toLowerCase().includes(query) ||
-        product.code.toLowerCase().includes(query) ||
+        product.item_article?.toLowerCase().includes(query) ||
         product.item_number?.toLowerCase().includes(query) ||
-        product.item_article?.toLowerCase().includes(query);
+        product.code.toLowerCase().includes(query);
       const matchesCategory = !categoryFilter || product.category_id === categoryFilter;
       return matchesSearch && matchesCategory;
     });
@@ -229,7 +229,7 @@ export function POS() {
           cost_price: Number(variant.cost_price),
           discount_amount: 0,
           product_name: variant.product.name,
-          item_number: variant.product.item_number || variant.product.code,
+          item_number: variant.product.item_article || variant.product.item_number || variant.product.code,
           barcode_number: variant.barcode_number,
           size: variant.size,
           color: variant.color,
@@ -602,7 +602,7 @@ export function POS() {
 
           {showProductBrowser && <section className="space-y-4">
             <div className="glass-card grid gap-3 p-4 sm:grid-cols-[1fr_220px]">
-              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name, code, or article" className="pl-10"/></div>
+              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name or article number" className="pl-10"/></div>
               <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -624,7 +624,7 @@ export function POS() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-dashboard-text-primary">{product.name}</p>
-                      <p className="mt-1 truncate text-xs text-dashboard-text-sub">{product.item_number || product.code} · {product.category?.name || 'Uncategorized'}</p>
+                      <p className="mt-1 truncate text-xs text-dashboard-text-sub">{product.item_article || product.item_number || product.code} · {product.category?.name || 'Uncategorized'}</p>
                       <div className="mt-2 flex items-center justify-between text-sm">
                         <span className="font-medium text-dashboard-text-primary">{Number.isFinite(startPrice) ? formatCurrency(startPrice) : '-'}</span>
                         <span className={`rounded-full px-2 py-1 text-xs ${totalStock > 0 ? 'bg-green-500/15 text-green-300' : 'bg-red-500/15 text-red-300'}`}>
@@ -845,7 +845,7 @@ export function POS() {
                 onClick={() => addVariantToCart(variant)}
                 disabled={variant.stock_quantity <= 0}
               >
-                <p className="font-medium text-dashboard-text-primary">{variant.product.code} - {variant.size} / {variant.color}</p>
+                <p className="font-medium text-dashboard-text-primary">{variant.product.item_article || variant.product.item_number || variant.product.code} - {variant.size} / {variant.color}</p>
                 <p className="mt-1 text-sm text-dashboard-text-sub">{formatCurrency(Number(variant.selling_price))}</p>
                 <p className="mt-2 text-xs text-dashboard-text-sub">{variant.stock_quantity} in stock</p>
               </button>

@@ -78,12 +78,13 @@ const posProductSelect = `
   product_variants(*)
 `;
 
-export async function getPOSProductByItemNumber(itemNumber: string) {
+export async function getPOSProductByArticleNumber(articleNumber: string) {
   return supabase
     .from('products')
     .select(posProductSelect)
-    .eq('item_number', itemNumber.trim())
+    .or(`item_article.eq.${articleNumber.trim()},item_number.eq.${articleNumber.trim()},code.eq.${articleNumber.trim()}`)
     .eq('is_active', true)
+    .limit(1)
     .maybeSingle();
 }
 
@@ -105,7 +106,7 @@ export async function searchPOSProducts(query: string, limit = 8) {
       .from('products')
       .select('*,category:categories(*),brand:brands(*),product_variants(stock_quantity,is_active)')
       .eq('is_active', true)
-      .or(`item_number.ilike.%${term}%,code.ilike.%${term}%,name.ilike.%${term}%,item_article.ilike.%${term}%`)
+      .or(`item_article.ilike.%${term}%,item_number.ilike.%${term}%,code.ilike.%${term}%,name.ilike.%${term}%`)
       .limit(limit),
     supabase
       .from('product_variants')
@@ -139,8 +140,8 @@ export async function searchPOSProducts(query: string, limit = 8) {
         .reduce((sum: number, variant: ProductVariant) => sum + Math.max(Number(variant.stock_quantity), 0), 0),
     }))
     .sort((a, b) => {
-      const aNumber = a.item_number || a.code;
-      const bNumber = b.item_number || b.code;
+      const aNumber = a.item_article || a.item_number || a.code;
+      const bNumber = b.item_article || b.item_number || b.code;
       const aExact = aNumber.toLowerCase() === normalized ? 0 : 1;
       const bExact = bNumber.toLowerCase() === normalized ? 0 : 1;
       return aExact - bExact || aNumber.localeCompare(bNumber, undefined, { numeric: true });
@@ -164,12 +165,12 @@ export async function searchVariants(query: string) {
   const lowerQuery = normalizedQuery.toLowerCase();
   const filtered = (data ?? []).filter((variant: ProductVariant & { product: Product | null }) => {
     const productName = variant.product?.name?.toLowerCase() ?? '';
-    const productCode = (variant.product?.item_number || variant.product?.code || '').toLowerCase();
     const itemArticle = variant.product?.item_article?.toLowerCase() ?? '';
+    const legacyArticle = (variant.product?.item_number || variant.product?.code || '').toLowerCase();
     const barcode = variant.barcode_number?.toLowerCase() ?? '';
     return productName.includes(lowerQuery)
-      || productCode.includes(lowerQuery)
       || itemArticle.includes(lowerQuery)
+      || legacyArticle.includes(lowerQuery)
       || barcode.includes(lowerQuery);
   });
 
@@ -184,7 +185,7 @@ export async function createVariant(data: CreateVariantInput) {
   return supabase.from('product_variants').insert(data);
 }
 
-export async function updateVariant(id: string, data: Partial<Omit<ProductVariant, 'id' | 'created_at' | 'product_id' | 'barcode_number'>>) {
+export async function updateVariant(id: string, data: Partial<Omit<ProductVariant, 'id' | 'created_at' | 'product_id'>>) {
   return supabase.from('product_variants').update(data).eq('id', id);
 }
 
