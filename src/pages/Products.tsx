@@ -21,7 +21,6 @@ import {
 } from '../components/ui';
 
 interface ProductFormInputs {
-  item_number: string;
   name: string;
   category_id: string;
   brand_id: string;
@@ -72,8 +71,6 @@ export function Products() {
 
     try {
       const payload = {
-        code: data.item_number,
-        item_number: data.item_number,
         is_active: true,
         name: data.name,
         category_id: data.category_id || null,
@@ -87,7 +84,11 @@ export function Products() {
         if (updateError) throw updateError;
       } else {
         const { error: createError } = await productService.createProduct(payload);
-        if (createError) throw createError ?? new Error('Failed to create product');
+        if (createError) {
+          console.error('Automatic product code generation failed:', createError);
+          setError('Unable to generate product code. Please try again.');
+          return;
+        }
       }
 
       closeModal();
@@ -100,7 +101,6 @@ export function Products() {
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     reset({
-      item_number: product.item_number || product.code,
       name: product.name,
       category_id: product.category_id || '',
       brand_id: product.brand_id || '',
@@ -186,7 +186,17 @@ export function Products() {
       {showModal && (
         <Modal title={editingId ? 'Edit Product' : 'Add Product'} onClose={closeModal} size="lg">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <Input id="item_number" label="Item Number" placeholder="e.g. SH-001 or 1001" error={errors.item_number?.message} {...register('item_number', { required: 'Item number is required', pattern: { value: /^[A-Za-z0-9-]+$/, message: 'Use only letters, numbers, and hyphens' } })} />
+            <div>
+              <span className="mb-1 block text-sm font-medium text-dashboard-text-label">Product Code</span>
+              <div className="rounded-lg border border-white/10 bg-white/[.04] px-3 py-2.5 text-sm text-dashboard-text-primary">
+                {editingId
+                  ? products.find((product) => product.id === editingId)?.item_number || products.find((product) => product.id === editingId)?.code
+                  : 'Will be generated automatically'}
+              </div>
+              <p className="mt-1 text-xs text-dashboard-text-sub">
+                {editingId ? 'Product codes cannot be changed.' : 'The next sequential code is assigned when you create the product.'}
+              </p>
+            </div>
             <Input id="name" label="Name" error={errors.name?.message} {...register('name', { required: 'Name is required' })} />
             <Select id="category_id" label="Category" {...register('category_id')}>
               <option value="">Select a category</option>

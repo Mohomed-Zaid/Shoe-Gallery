@@ -1,6 +1,7 @@
 import JsBarcode from 'jsbarcode';
 import barcodeLabelCss from '../styles/barcode-label-print.css?inline';
 import { formatBarcodeLabelPrice } from '../utils/format';
+import { encodeCostPrice } from '../utils/costCode';
 
 export interface BarcodeLabelPrintOptions {
   copies?: number;
@@ -11,6 +12,7 @@ export interface BarcodeLabelPrintOptions {
   itemNumber?: string;
   storeName?: string;
   sellingPrice?: number;
+  costPrice?: number | string;
   density?: BarcodePrintDensity;
 }
 
@@ -251,11 +253,16 @@ export async function printBarcodeLabels(
   const escapedNumber = escapeHtml(value);
   const escapedStoreName = escapeHtml(options.storeName?.trim() || 'SHOE GALLERY');
   const escapedSellingPrice = escapeHtml(formatBarcodeLabelPrice(sellingPrice));
+  const costCode = options.costPrice == null ? '' : encodeCostPrice(options.costPrice);
+  const escapedCostCode = escapeHtml(costCode);
+  const costCodeMarkup = escapedCostCode
+    ? `<span class="barcode-cost-code">${escapedCostCode}</span>`
+    : '';
   const density = options.density ?? getBarcodePrintDensity();
   const labels = Array.from(
     { length: copies },
     () =>
-      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-store-name">${escapedStoreName}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-number">${escapedNumber}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`,
+      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-store-name">${escapedStoreName}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-meta-row"><span class="barcode-number">${escapedNumber}</span>${costCodeMarkup}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`,
   ).join('');
   const horizontalOffset = boundedNumber(options.horizontalOffsetMm, 0, -3, 3);
   const verticalOffset = boundedNumber(options.verticalOffsetMm, 0, -3, 3);

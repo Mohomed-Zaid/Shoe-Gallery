@@ -166,6 +166,7 @@ export function BarcodePrinting() {
         storeName: printerSettings?.store_name || 'SHOE GALLERY',
         itemNumber: selectedVariant.product?.item_number || selectedVariant.product?.code,
         sellingPrice: Number(selectedVariant.selling_price),
+        costPrice: selectedVariant.cost_price,
         density: getBarcodePrintDensity(),
         barcodeWidth: Number(printerSettings?.barcode_width ?? DEFAULT_BARCODE_WIDTH),
         barcodeHeight: Number(printerSettings?.barcode_height ?? DEFAULT_BARCODE_HEIGHT),
@@ -328,6 +329,7 @@ export function BarcodePrinting() {
                 itemNumber={selectedVariant?.product?.item_number || selectedVariant?.product?.code}
                 storeName={printerSettings?.store_name || 'SHOE GALLERY'}
                 sellingPrice={Number(selectedVariant.selling_price)}
+                costPrice={selectedVariant.cost_price}
               />
             </div>
           ) : (

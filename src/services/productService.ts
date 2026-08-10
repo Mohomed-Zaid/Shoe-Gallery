@@ -33,7 +33,9 @@ export async function getProductById(id: string) {
   return supabase.from('products').select('*').eq('id', id).maybeSingle();
 }
 
-export async function createProduct(data: Omit<Product, 'id' | 'created_at'>) {
+export type CreateProductInput = Omit<Product, 'id' | 'created_at' | 'code' | 'item_number'>;
+
+export async function createProduct(data: CreateProductInput) {
   return supabase.from('products').insert(data).select().single();
 }
 
