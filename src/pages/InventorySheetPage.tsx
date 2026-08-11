@@ -6,7 +6,8 @@ import type { InventoryMatrixProduct } from '../services/inventoryService';
 import * as inventoryService from '../services/inventoryService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
-import { Alert, Button, LoadingSpinner, Modal, PageHeader } from '../components/ui';
+import { Alert, Button, Input, LoadingSpinner, Modal, PageHeader } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -30,20 +31,26 @@ function stockLabel(quantity: number) {
   return 'In Stock';
 }
 
+function formatOptionalPrice(value: number | null | undefined) {
+  return value === null || value === undefined ? '-' : formatCurrency(Number(value));
+}
+
 export function InventorySheetPage() {
+  const { profile } = useAuth();
   const { productId } = useParams<{ productId: string }>();
   const [product, setProduct] = useState<InventoryMatrixProduct | null>(null);
   const [sizes, setSizes] = useState<string[]>([]);
   const [colours, setColours] = useState<string[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
-  const [baseCostPrice, setBaseCostPrice] = useState(0);
-  const [baseSellingPrice, setBaseSellingPrice] = useState(0);
   const [loading, setLoading] = useState(true);
   const [changingDimension, setChangingDimension] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [costPrice, setCostPrice] = useState('');
+  const [sellingPrice, setSellingPrice] = useState('');
+  const [savingPrices, setSavingPrices] = useState(false);
   const pendingSaves = useRef(0);
 
   const loadMatrix = useCallback(async (showLoader = true) => {
@@ -71,8 +78,6 @@ export function InventorySheetPage() {
       setColours(result.data.colours);
       setVariants(result.data.variants);
       setQuantities(nextQuantities);
-      setBaseCostPrice(result.data.baseCostPrice);
-      setBaseSellingPrice(result.data.baseSellingPrice);
       setSaveState('idle');
     }
     if (showLoader) setLoading(false);
@@ -81,6 +86,12 @@ export function InventorySheetPage() {
   useEffect(() => {
     void loadMatrix();
   }, [loadMatrix]);
+
+  useEffect(() => {
+    if (!selectedVariant) return;
+    setCostPrice(selectedVariant.cost_price === null ? '' : String(selectedVariant.cost_price));
+    setSellingPrice(selectedVariant.selling_price === null ? '' : String(selectedVariant.selling_price));
+  }, [selectedVariant]);
 
   const variantsByCell = useMemo(() => {
     const grouped = new Map<string, ProductVariant[]>();
@@ -158,6 +169,31 @@ export function InventorySheetPage() {
     setChangingDimension(false);
   };
 
+  const saveVariantPrices = async () => {
+    if (!selectedVariant) return;
+    const nextCost = costPrice.trim() === '' ? null : Number(costPrice);
+    const nextSelling = sellingPrice.trim() === '' ? null : Number(sellingPrice);
+    if ((nextCost !== null && (!Number.isFinite(nextCost) || nextCost < 0))
+      || (nextSelling !== null && (!Number.isFinite(nextSelling) || nextSelling < 0))) {
+      setError('Prices must be valid non-negative numbers or left blank.');
+      return;
+    }
+
+    setSavingPrices(true);
+    setError(null);
+    const result = await inventoryService.updateVariantPrices(selectedVariant.id, {
+      cost_price: nextCost,
+      selling_price: nextSelling,
+    });
+    if (result.error) {
+      setError(getErrorMessage(result.error, 'Could not update variant prices'));
+    } else {
+      setSelectedVariant(result.data as ProductVariant);
+      await loadMatrix(false);
+    }
+    setSavingPrices(false);
+  };
+
   if (loading) return <LoadingSpinner />;
   if (!product) return <Alert message={error ?? 'Product not found'} />;
 
@@ -183,8 +219,6 @@ export function InventorySheetPage() {
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Article Number</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.item_article || product.item_number || product.code}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Category</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.category?.name || '—'}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Brand</p><p className="mt-1 font-semibold text-dashboard-text-primary">{product.brand?.name || '—'}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Base Cost</p><p className="mt-1 font-semibold text-dashboard-text-primary">{formatCurrency(baseCostPrice)}</p></div>
-          <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Base Selling</p><p className="mt-1 font-semibold text-dashboard-text-primary">{formatCurrency(baseSellingPrice)}</p></div>
           <div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Total Stock</p><p className="mt-1 text-lg font-bold text-dashboard-accent">{grandTotal}</p></div>
         </div>
       </section>
@@ -236,8 +270,8 @@ export function InventorySheetPage() {
                       `${colour} / Size ${size}`,
                       `Stock: ${quantity} (${stockLabel(quantity)})`,
                       details?.barcode_number ? `Barcode: ${details.barcode_number}` : null,
-                      details ? `Cost: ${formatCurrency(details.cost_price)}` : null,
-                      details ? `Selling: ${formatCurrency(details.selling_price)}` : null,
+                      details ? `Cost: ${formatOptionalPrice(details.cost_price)}` : null,
+                      details ? `Selling: ${formatOptionalPrice(details.selling_price)}` : null,
                     ].filter(Boolean).join('\n');
                     return (
                       <td
@@ -302,11 +336,24 @@ export function InventorySheetPage() {
             <div><dt className="text-dashboard-text-label">Article Number</dt><dd className="font-semibold text-dashboard-text-primary">{product.item_article || product.item_number || product.code}</dd></div>
             <div><dt className="text-dashboard-text-label">Size</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.size}</dd></div>
             <div><dt className="text-dashboard-text-label">Colour</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.color}</dd></div>
-            <div><dt className="text-dashboard-text-label">Stock</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.stock_quantity}</dd></div>
+            <div><dt className="text-dashboard-text-label">Current Stock</dt><dd className="font-semibold text-dashboard-text-primary">{quantityAt(selectedVariant.size, selectedVariant.color)}</dd></div>
             <div><dt className="text-dashboard-text-label">Barcode Number</dt><dd className="font-semibold text-sky-300">{selectedVariant.barcode_number || '—'}</dd></div>
-            <div><dt className="text-dashboard-text-label">Cost Price</dt><dd className="font-semibold text-dashboard-text-primary">{formatCurrency(selectedVariant.cost_price)}</dd></div>
-            <div><dt className="text-dashboard-text-label">Selling Price</dt><dd className="font-semibold text-dashboard-text-primary">{formatCurrency(selectedVariant.selling_price)}</dd></div>
+            <div><dt className="text-dashboard-text-label">Cost Price</dt><dd className="font-semibold text-dashboard-text-primary">{formatOptionalPrice(selectedVariant.cost_price)}</dd></div>
+            <div><dt className="text-dashboard-text-label">Selling Price</dt><dd className="font-semibold text-dashboard-text-primary">{formatOptionalPrice(selectedVariant.selling_price)}</dd></div>
+            <div><dt className="text-dashboard-text-label">Stock Value</dt><dd className="font-semibold text-dashboard-text-primary">{selectedVariant.cost_price === null ? '-' : formatCurrency(quantityAt(selectedVariant.size, selectedVariant.color) * Number(selectedVariant.cost_price))}</dd></div>
           </dl>
+          {profile?.role === 'admin' && (
+            <div className="mt-5 border-t border-white/10 pt-5">
+              <p className="mb-3 text-sm font-semibold text-dashboard-text-primary">Edit variant prices</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="Cost Price" type="number" min="0" step="0.01" value={costPrice} onChange={(event) => setCostPrice(event.target.value)} />
+                <Input label="Selling Price" type="number" min="0" step="0.01" value={sellingPrice} onChange={(event) => setSellingPrice(event.target.value)} />
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button disabled={savingPrices} onClick={() => void saveVariantPrices()}>{savingPrices ? 'Saving...' : 'Save Prices'}</Button>
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </div>

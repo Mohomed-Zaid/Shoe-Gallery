@@ -5,10 +5,15 @@ export interface InventoryProductSummary extends Product {
   category: Category | null;
   brand: Brand | null;
   product_variants: ProductVariant[];
-  base_cost_price: number;
-  base_selling_price: number;
+  cost_price_range: InventoryPriceRange | null;
+  selling_price_range: InventoryPriceRange | null;
   total_stock: number;
   stock_value: number;
+}
+
+export interface InventoryPriceRange {
+  min: number;
+  max: number;
 }
 
 export interface InventoryMatrixProduct extends Product {
@@ -22,8 +27,6 @@ export interface ProductInventoryMatrixData {
   sizes: string[];
   colours: string[];
   variants: ProductVariant[];
-  baseCostPrice: number;
-  baseSellingPrice: number;
 }
 
 interface MatrixDimensionRow {
@@ -34,6 +37,17 @@ interface MatrixDimensionRow {
 
 function normalized(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function priceRange(variants: ProductVariant[], field: 'cost_price' | 'selling_price'): InventoryPriceRange | null {
+  const prices = variants
+    .map((variant) => variant[field])
+    .filter((price): price is number => price !== null && price !== undefined)
+    .map(Number)
+    .filter(Number.isFinite);
+
+  if (!prices.length) return null;
+  return { min: Math.min(...prices), max: Math.max(...prices) };
 }
 
 function dimensionsWithVariantFallback(
@@ -68,17 +82,14 @@ export async function getInventoryProducts(): Promise<{ data: InventoryProductSu
   const data = (result.data ?? []).map((rawProduct) => {
     const product = rawProduct as InventoryMatrixProduct;
     const variants = (product.product_variants ?? []).filter((variant) => variant.is_active !== false);
-    const baseCost = Number(product.base_cost_price ?? variants[0]?.cost_price ?? 0);
-    const baseSelling = Number(product.base_selling_price ?? variants[0]?.selling_price ?? 0);
-
     return {
       ...product,
       product_variants: variants,
-      base_cost_price: baseCost,
-      base_selling_price: baseSelling,
+      cost_price_range: priceRange(variants, 'cost_price'),
+      selling_price_range: priceRange(variants, 'selling_price'),
       total_stock: variants.reduce((sum, variant) => sum + Math.max(Number(variant.stock_quantity), 0), 0),
       stock_value: variants.reduce(
-        (sum, variant) => sum + Math.max(Number(variant.stock_quantity), 0) * Math.max(Number(variant.cost_price), 0),
+        (sum, variant) => sum + Math.max(Number(variant.stock_quantity), 0) * Math.max(Number(variant.cost_price ?? 0), 0),
         0
       ),
     };
@@ -118,11 +129,21 @@ export async function getProductInventoryMatrix(productId: string): Promise<{ da
       sizes: dimensionsWithVariantFallback(dimensions, variants, 'size'),
       colours: dimensionsWithVariantFallback(dimensions, variants, 'colour'),
       variants,
-      baseCostPrice: Number(product.base_cost_price ?? variants[0]?.cost_price ?? 0),
-      baseSellingPrice: Number(product.base_selling_price ?? variants[0]?.selling_price ?? 0),
     },
     error: null,
   };
+}
+
+export async function updateVariantPrices(
+  variantId: string,
+  prices: Pick<ProductVariant, 'cost_price' | 'selling_price'>
+) {
+  return supabase
+    .from('product_variants')
+    .update(prices)
+    .eq('id', variantId)
+    .select()
+    .single();
 }
 
 export async function addInventoryMatrixDimension(

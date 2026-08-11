@@ -17,13 +17,13 @@
   height: 3.4mm;
   align-items: center;
   justify-content: center;
-  gap: 0.9mm;
+  gap: 0.7mm;
   overflow: hidden;
   padding: 0 0.8mm;
   box-sizing: border-box;
   color: #000 !important;
-  font-size: 2.05mm;
-  font-weight: 800;
+  font-size: 2.7mm;
+  font-weight: 900;
   letter-spacing: 0.03mm;
   line-height: 3.4mm;
   white-space: nowrap;
@@ -32,7 +32,7 @@
 .barcode-label-header > span {
   min-width: 0;
   color: #000 !important;
-  font-weight: 800;
+  font-weight: 900;
   white-space: nowrap;
 }
 

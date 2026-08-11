@@ -14,7 +14,7 @@ export interface BarcodeLabelProps {
   articleNumber?: string;
   colour?: string;
   size?: string;
-  sellingPrice: number;
+  sellingPrice: number | null;
   costPrice?: number | string;
   density?: BarcodePrintDensity;
 }
@@ -58,7 +58,7 @@ export function BarcodeLabel({
             <span className="barcode-number">{barcodeNumber}</span>
             {costCode && <span className="barcode-cost-code">{costCode}</span>}
           </div>
-          <div className="barcode-label-price">{formatBarcodeLabelPrice(sellingPrice)}</div>
+          <div className="barcode-label-price">{sellingPrice === null ? '-' : formatBarcodeLabelPrice(sellingPrice)}</div>
         </div>
       </div>
     </div>

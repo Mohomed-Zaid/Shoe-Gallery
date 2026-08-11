@@ -42,8 +42,8 @@ export interface ProductVariant {
   product_id: string;
   size: string;
   color: string;
-  cost_price: number;
-  selling_price: number;
+  cost_price: number | null;
+  selling_price: number | null;
   stock_quantity: number;
   barcode_number: string | null;
   is_active?: boolean;

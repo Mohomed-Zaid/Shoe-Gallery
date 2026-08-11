@@ -107,8 +107,8 @@ export function ProductDetail() {
     reset({
       size: variant.size,
       color: variant.color,
-      cost_price: variant.cost_price,
-      selling_price: variant.selling_price,
+      cost_price: variant.cost_price ?? undefined,
+      selling_price: variant.selling_price ?? undefined,
       stock_quantity: variant.stock_quantity,
     });
     setShowModal(true);
@@ -193,8 +193,8 @@ export function ProductDetail() {
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.color}</td>
                 <td className="px-6 py-4 text-sm font-medium text-sky-300">{variant.barcode_number || '—'}</td>
                 <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.stock_quantity}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.cost_price)}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatCurrency(variant.selling_price)}</td>
+                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.cost_price === null ? '-' : formatCurrency(variant.cost_price)}</td>
+                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.selling_price === null ? '-' : formatCurrency(variant.selling_price)}</td>
                 <td className="px-6 py-4 text-right text-sm">
                   <button type="button" onClick={() => handleEditVariant(variant)} className="mr-3 text-white/80 hover:text-white">
                     <Edit2 size={18} />

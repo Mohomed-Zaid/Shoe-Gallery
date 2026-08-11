@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import * as inventoryService from '../services/inventoryService';
 import * as productService from '../services/productService';
 import type { InventoryProductSummary } from '../services/inventoryService';
+import type { InventoryPriceRange } from '../services/inventoryService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
 import { Alert, Button, DataTable, Input, LoadingSpinner, PageHeader } from '../components/ui';
@@ -12,6 +13,12 @@ function stockStatus(stock: number) {
   if (stock <= 0) return { label: 'Out of Stock', className: 'bg-red-500/20 text-red-300' };
   if (stock < 10) return { label: 'Low Stock', className: 'bg-yellow-500/20 text-yellow-300' };
   return { label: 'In Stock', className: 'bg-green-500/20 text-green-300' };
+}
+
+function formatPriceRange(range: InventoryPriceRange | null) {
+  if (!range) return '-';
+  if (range.min === range.max) return formatCurrency(range.min);
+  return `${formatCurrency(range.min)} - ${formatCurrency(range.max)}`;
 }
 
 export function Inventory() {
@@ -38,7 +45,7 @@ export function Inventory() {
     const term = search.trim().toLowerCase();
     if (!term) return products;
     return products.filter((product) =>
-      [product.item_article, product.name, product.category?.name, product.brand?.name]
+      [product.code, product.item_article, product.item_number, product.name, product.category?.name, product.brand?.name]
         .some((value) => value?.toLowerCase().includes(term))
       || product.product_variants.some((variant) => variant.barcode_number?.toLowerCase().includes(term))
     );
@@ -89,8 +96,9 @@ export function Inventory() {
       ) : (
         <DataTable
           columns={[
-            { key: 'article', header: 'Article Number' },
+            { key: 'code', header: 'Code' },
             { key: 'product', header: 'Product' },
+            { key: 'article', header: 'Article' },
             { key: 'category', header: 'Category' },
             { key: 'brand', header: 'Brand' },
             { key: 'cost', header: 'Cost Price' },
@@ -112,16 +120,19 @@ export function Inventory() {
                 onClick={() => navigate(`/inventory/${product.id}`)}
               >
                 <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">
-                  {product.item_article || product.item_number || product.code}
+                  {product.code}
                 </td>
                 <td className="min-w-48 px-4 py-4 xl:px-6">
                   <p className="text-sm font-medium text-dashboard-text-primary">{product.name}</p>
                   <p className="max-w-56 truncate text-xs text-dashboard-text-sub">{product.description || '—'}</p>
                 </td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">
+                  {product.item_article || product.item_number || '-'}
+                </td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.category?.name || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.brand?.name || '—'}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{formatCurrency(product.base_cost_price)}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-dashboard-text-primary xl:px-6">{formatCurrency(product.base_selling_price)}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{formatPriceRange(product.cost_price_range)}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-dashboard-text-primary xl:px-6">{formatPriceRange(product.selling_price_range)}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">{product.total_stock}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-primary xl:px-6">{formatCurrency(product.stock_value)}</td>
                 <td className="whitespace-nowrap px-4 py-4 xl:px-6">
