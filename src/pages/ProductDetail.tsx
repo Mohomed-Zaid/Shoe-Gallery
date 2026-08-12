@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Barcode, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import type { Product, ProductVariant, Category, Brand } from '../types';
+import type { Product, ProductVariant, Category, Brand, StoreSettings } from '../types';
 import * as productService from '../services/productService';
 import * as categoryService from '../services/categoryService';
 import * as brandService from '../services/brandService';
+import { getStoreSettings } from '../services/settingsService';
+import {
+  getBarcodePrintDensity,
+  printBarcodeLabels,
+} from '../services/barcodeLabelPrintService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency, formatDate } from '../utils/format';
 import {
@@ -26,6 +31,15 @@ interface VariantFormInputs {
   stock_quantity: number;
 }
 
+const DEFAULT_BARCODE_WIDTH = 1;
+const DEFAULT_BARCODE_HEIGHT = 36;
+
+function getPrintErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : 'Unable to open barcode print window.';
+}
+
 export function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
@@ -36,6 +50,10 @@ export function ProductDetail() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [printerSettings, setPrinterSettings] = useState<StoreSettings | null>(null);
+  const [printerSettingsReady, setPrinterSettingsReady] = useState(false);
+  const [printerSettingsError, setPrinterSettingsError] = useState<string | null>(null);
+  const [printingVariantId, setPrintingVariantId] = useState<string | null>(null);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<VariantFormInputs>();
 
   const fetchData = useCallback(async () => {
@@ -70,6 +88,31 @@ export function ProductDetail() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      try {
+        const result = await getStoreSettings();
+        if (!active) return;
+        if (result.error) {
+          setPrinterSettingsError('Unable to load barcode printer settings.');
+          return;
+        }
+
+        setPrinterSettings(result.data as StoreSettings | null);
+        setPrinterSettingsReady(true);
+      } catch (settingsLoadError) {
+        console.error('Barcode printer settings failed to load:', settingsLoadError);
+        if (active) setPrinterSettingsError('Unable to load barcode printer settings.');
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const closeModal = () => {
     setShowModal(false);
@@ -114,6 +157,50 @@ export function ProductDetail() {
     setShowModal(true);
   };
 
+  const handlePrintBarcode = (variant: ProductVariant) => {
+    if (!product) return;
+    const barcodeNumber = variant.barcode_number?.trim();
+    if (!barcodeNumber) {
+      setError('Barcode number is not available for this variant.');
+      return;
+    }
+    if (!printerSettingsReady) {
+      setError(printerSettingsError ?? 'Barcode printer settings are still loading.');
+      return;
+    }
+    if (printingVariantId) return;
+
+    setError(null);
+    setPrintingVariantId(variant.id);
+
+    try {
+      const printResult = printBarcodeLabels(barcodeNumber, {
+        copies: 1,
+        articleNumber: product.item_article || product.item_number || product.code || undefined,
+        colour: variant.color,
+        size: variant.size,
+        sellingPrice: variant.selling_price ?? undefined,
+        costPrice: variant.cost_price ?? undefined,
+        density: getBarcodePrintDensity(),
+        barcodeWidth: Number(printerSettings?.barcode_width ?? DEFAULT_BARCODE_WIDTH),
+        barcodeHeight: Number(printerSettings?.barcode_height ?? DEFAULT_BARCODE_HEIGHT),
+        horizontalOffsetMm: Number(printerSettings?.barcode_horizontal_offset_mm ?? 0),
+        verticalOffsetMm: Number(printerSettings?.barcode_vertical_offset_mm ?? 0),
+      });
+
+      void printResult.catch((printError: unknown) => {
+        console.error('Barcode label printing failed:', printError);
+        setError(getPrintErrorMessage(printError));
+      }).finally(() => {
+        setPrintingVariantId(null);
+      });
+    } catch (printError) {
+      console.error('Barcode label printing failed:', printError);
+      setError(getPrintErrorMessage(printError));
+      setPrintingVariantId(null);
+    }
+  };
+
   const handleDeleteVariant = async (variantId: string) => {
     if (!confirm('Delete this variant?')) return;
     const { error: deleteError } = await productService.deleteVariant(variantId);
@@ -144,8 +231,8 @@ export function ProductDetail() {
 
       {error && <Alert message={error} />}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="glass-card p-6 lg:col-span-1">
+      <div className="grid min-w-0 max-w-full gap-6 lg:grid-cols-3">
+        <div className="glass-card min-w-0 max-w-full p-6 lg:col-span-1">
           <h3 className="text-lg font-semibold text-dashboard-text-primary">{product.name}</h3>
           <p className="mt-1 text-sm text-dashboard-text-sub">Article Number: {product.item_article || product.item_number || product.code}</p>
           <p className="mt-2 text-sm text-dashboard-text-sub">{product.description || 'No description'}</p>
@@ -165,8 +252,8 @@ export function ProductDetail() {
           </dl>
         </div>
 
-        <div className="space-y-4 lg:col-span-2">
-          <div className="flex items-center justify-between">
+        <div className="min-w-0 max-w-full space-y-4 lg:col-span-2">
+          <div className="flex min-w-0 items-center justify-between">
             <h3 className="text-lg font-semibold text-dashboard-text-primary">Variants</h3>
             <Button onClick={() => { setEditingVariantId(null); reset(); setShowModal(true); }}>
               <Plus size={18} />
@@ -176,32 +263,46 @@ export function ProductDetail() {
 
           <DataTable
             columns={[
-              { key: 'size', header: 'Size' },
-              { key: 'color', header: 'Colour' },
-              { key: 'barcode', header: 'Barcode Number' },
-              { key: 'stock', header: 'Stock' },
-              { key: 'cost', header: 'Cost' },
-              { key: 'price', header: 'Selling Price' },
-              { key: 'actions', header: 'Actions', className: 'text-right' },
+              { key: 'size', header: 'Size', className: 'w-[10%]' },
+              { key: 'color', header: 'Colour', className: 'w-[12%]' },
+              { key: 'barcode', header: 'Barcode Number', className: 'w-[18%]' },
+              { key: 'stock', header: 'Stock', className: 'w-[9%]' },
+              { key: 'cost', header: 'Cost', className: 'w-[15%]' },
+              { key: 'price', header: 'Selling Price', className: 'w-[19%]' },
+              { key: 'actions', header: 'Actions', className: 'w-[17%] text-right' },
             ]}
+            className="product-variants-table"
             isEmpty={variants.length === 0}
             emptyMessage="No variants yet"
           >
             {variants.map((variant) => (
               <tr key={variant.id} className="hover:bg-dashboard-hover">
-                <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{variant.size}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.color}</td>
-                <td className="px-6 py-4 text-sm font-medium text-sky-300">{variant.barcode_number || '—'}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.stock_quantity}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.cost_price === null ? '-' : formatCurrency(variant.cost_price)}</td>
-                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{variant.selling_price === null ? '-' : formatCurrency(variant.selling_price)}</td>
-                <td className="px-6 py-4 text-right text-sm">
-                  <button type="button" onClick={() => handleEditVariant(variant)} className="mr-3 text-white/80 hover:text-white">
-                    <Edit2 size={18} />
-                  </button>
-                  <button type="button" onClick={() => handleDeleteVariant(variant.id)} className="text-red-400 hover:text-red-300">
-                    <Trash2 size={18} />
-                  </button>
+                <td title={variant.size} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] font-medium text-dashboard-text-primary 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.size}</td>
+                <td title={variant.color} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] text-dashboard-text-sub 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.color}</td>
+                <td title={variant.barcode_number || 'No barcode'} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] font-medium text-sky-300 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.barcode_number || '—'}</td>
+                <td title={String(variant.stock_quantity)} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] text-dashboard-text-sub 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.stock_quantity}</td>
+                <td title={variant.cost_price === null ? 'No cost price' : formatCurrency(variant.cost_price)} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] text-dashboard-text-sub 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.cost_price === null ? '-' : formatCurrency(variant.cost_price)}</td>
+                <td title={variant.selling_price === null ? 'No selling price' : formatCurrency(variant.selling_price)} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] text-dashboard-text-sub 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.selling_price === null ? '-' : formatCurrency(variant.selling_price)}</td>
+                <td className="overflow-hidden whitespace-nowrap px-1 py-2.5 text-right text-[13px] 2xl:px-4 2xl:py-4 2xl:text-sm">
+                  <div className="inline-flex max-w-full items-center gap-1 whitespace-nowrap 2xl:gap-2">
+                    <button
+                      type="button"
+                      title="Print Barcode"
+                      aria-label="Print Barcode"
+                      aria-busy={printingVariantId === variant.id}
+                      onClick={() => handlePrintBarcode(variant)}
+                      className="rounded p-1 text-sky-300 transition hover:bg-white/[0.06] hover:text-sky-200 disabled:opacity-50"
+                      disabled={printingVariantId !== null}
+                    >
+                      <Barcode size={18} />
+                    </button>
+                    <button type="button" title="Edit Variant" aria-label="Edit Variant" onClick={() => handleEditVariant(variant)} className="rounded p-1 text-white/80 transition hover:bg-white/[0.06] hover:text-white">
+                      <Edit2 size={18} />
+                    </button>
+                    <button type="button" title="Delete Variant" aria-label="Delete Variant" onClick={() => handleDeleteVariant(variant.id)} className="rounded p-1 text-red-400 transition hover:bg-white/[0.06] hover:text-red-300">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

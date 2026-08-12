@@ -5,11 +5,12 @@ interface DataTableProps {
   children: ReactNode;
   emptyMessage?: string;
   isEmpty?: boolean;
+  className?: string;
 }
 
-export function DataTable({ columns, children, emptyMessage = 'No data found', isEmpty }: DataTableProps) {
+export function DataTable({ columns, children, emptyMessage = 'No data found', isEmpty, className = '' }: DataTableProps) {
   return (
-    <div className="dashboard-table max-w-full overflow-x-auto overscroll-x-contain">
+    <div className={`dashboard-table max-w-full overflow-x-auto overscroll-x-contain ${className}`}>
       <table className="w-full min-w-max">
         <thead className="sticky top-0 z-10 border-b border-dashboard-border bg-[#071b15]/95 backdrop-blur">
           <tr>

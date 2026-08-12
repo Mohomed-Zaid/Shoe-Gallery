@@ -385,6 +385,54 @@
 
   .dashboard-table table { max-width: none; }
 
+  /* Product variants remain fully visible on compact POS displays. */
+  .product-variants-table {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .product-variants-table table {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .product-variants-table th {
+    overflow: hidden;
+    padding-right: .5rem;
+    padding-left: .5rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media screen and (min-width: 1536px) {
+    .product-variants-table th {
+      padding-right: 1rem;
+      padding-left: 1rem;
+    }
+  }
+
+  @media screen and (max-width: 767px) {
+    .product-variants-table th,
+    .product-variants-table td {
+      padding-right: .25rem !important;
+      padding-left: .25rem !important;
+      font-size: .75rem;
+    }
+
+    .product-variants-table td:last-child button {
+      padding: 0;
+    }
+
+    .product-variants-table td:last-child svg {
+      width: 1rem;
+      height: 1rem;
+    }
+  }
+
   /* ── Nav active pill ── */
   .nav-active {
     display: flex;
