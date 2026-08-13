@@ -102,7 +102,7 @@ export interface Sale {
   change_due: number;
   balance_due: number;
   payment_method: string;
-  status: 'held' | 'completed' | 'cancelled';
+  status: 'held' | 'completed' | 'partially_returned' | 'fully_returned' | 'cancelled';
   notes: string | null;
   created_at: string;
 }
@@ -114,6 +114,7 @@ export interface SaleItem {
   quantity: number;
   selling_price: number;
   cost_price: number | null;
+  cost_price_at_sale: number | null;
   discount_amount: number;
   line_total: number;
   product_name_snapshot: string | null;

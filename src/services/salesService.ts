@@ -129,7 +129,7 @@ export async function createSale(payload: CreateSalePayload) {
   const stockLookup = variantIds.length
     ? supabase
       .from('product_variants')
-      .select('id,stock_quantity,is_active')
+      .select('id,stock_quantity,is_active,cost_price')
       .in('id', variantIds)
     : Promise.resolve({ data: [], error: null });
   const [stockResult, prefix, authResult] = await Promise.all([
@@ -198,14 +198,19 @@ export async function createSale(payload: CreateSalePayload) {
     throw saleError ?? new Error('Failed to create sale.');
   }
 
-  const saleItems = payload.items.map((item) => ({
+  const saleItems = payload.items.map((item) => {
+    const currentVariant = item.is_instant_sale ? null : currentVariants.find((variant) => variant.id === item.variant_id);
+    const saleTimeCost = item.is_instant_sale
+      ? (item.cost_price == null ? null : Number(item.cost_price))
+      : (currentVariant?.cost_price == null ? null : Number(currentVariant.cost_price));
+    return ({
     sale_id: sale.id,
     variant_id: item.is_instant_sale ? null : item.variant_id,
     quantity: item.quantity,
     selling_price: item.unit_price,
     // Snapshot cost for every item. Never use the mutable variant cost in reports.
-    cost_price: item.cost_price == null ? null : Number(item.cost_price),
-    cost_price_at_sale: item.cost_price == null ? null : Number(item.cost_price),
+    cost_price: saleTimeCost,
+    cost_price_at_sale: saleTimeCost,
     line_subtotal: item.unit_price * item.quantity,
     discount_amount: item.discount_amount,
     line_total: item.unit_price * item.quantity - item.discount_amount,
@@ -216,7 +221,8 @@ export async function createSale(payload: CreateSalePayload) {
     color_snapshot: item.color,
     product_name: item.is_instant_sale ? item.product_name : null,
     is_instant_sale: item.is_instant_sale ?? false,
-  }));
+    });
+  });
 
   const saveSaleItems = async () => {
     const { error } = await supabase.from('sale_items').insert(saleItems);

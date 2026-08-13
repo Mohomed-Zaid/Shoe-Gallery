@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { calculateProfitTotals, type ProfitReturnItem, type ProfitSaleItem } from '../utils/profitCalculation';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -92,17 +93,18 @@ export async function getDashboardCards(): Promise<DashboardCards> {
     suppliersRes,
     inventoryRes,
     saleItemsRes,
+    returnedItemsRes,
   ] = await Promise.all([
     supabase
       .from('sales')
       .select('id, total_amount')
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned', 'fully_returned'])
       .gte('created_at', todayStart)
       .lte('created_at', todayEnd),
     supabase
       .from('sales')
       .select('id, total_amount')
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned', 'fully_returned'])
       .gte('created_at', monthStart),
     supabase.from('products').select('id', { count: 'exact', head: true }),
     supabase.from('customers').select('id', { count: 'exact', head: true }),
@@ -113,42 +115,28 @@ export async function getDashboardCards(): Promise<DashboardCards> {
       .select(`
         sale_id,
         quantity,
-        selling_price,
-        cost_price,
-        is_instant_sale,
-        variant:product_variants(cost_price)
+        cost_price_at_sale,
+        cost_price
       `),
+    supabase
+      .from('sales_return_items')
+      .select('quantity_returned, return_total, cost_price_at_sale, return:sales_returns!inner(sale_id, status)')
+      .eq('return.status', 'completed'),
   ]);
 
-  const todayRevenue = (todaySalesRes.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-  const monthlyRevenue = (monthlySalesRes.data ?? []).reduce((s, r) => s + Number(r.total_amount), 0);
-
-  // Profit = (selling_price - cost_price) * quantity for non-instant items
-  type SaleItemRow = {
-    sale_id: string;
-    quantity: number;
-    selling_price: number;
-    cost_price: number | null;
-    is_instant_sale: boolean | null;
-    variant: { cost_price: number } | null;
-  };
-  const allSaleItemsData = (saleItemsRes.data ?? []) as unknown as SaleItemRow[];
+  const allSaleItemsData = (saleItemsRes.data ?? []) as unknown as ProfitSaleItem[];
+  type ReturnedItemRow = Omit<ProfitReturnItem, 'sale_id'> & { return: { sale_id: string } | null };
+  const returnedItems = ((returnedItemsRes.data ?? []) as unknown as ReturnedItemRow[])
+    .filter((item) => item.return?.sale_id)
+    .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
   const todaySaleIds = new Set((todaySalesRes.data ?? []).map((sale) => sale.id));
   const monthSaleIds = new Set((monthlySalesRes.data ?? []).map((sale) => sale.id));
   const todaySaleItemsData = allSaleItemsData.filter((item) => todaySaleIds.has(item.sale_id));
-  const todayProfit = todaySaleItemsData.reduce((s, item) => {
-    if (item.is_instant_sale) return s + (Number(item.selling_price) - Number(item.cost_price ?? 0)) * item.quantity;
-    const cost = Number(item.variant?.cost_price ?? 0);
-    return s + (Number(item.selling_price) - cost) * item.quantity;
-  }, 0);
+  const todayTotals = calculateProfitTotals(todaySalesRes.data ?? [], todaySaleItemsData, returnedItems);
 
   // Monthly profit — fetch separately for the month
   const monthSaleItemsData = allSaleItemsData.filter((item) => monthSaleIds.has(item.sale_id));
-  const monthlyProfit = monthSaleItemsData.reduce((s, item) => {
-    if (item.is_instant_sale) return s + (Number(item.selling_price) - Number(item.cost_price ?? 0)) * item.quantity;
-    const cost = Number(item.variant?.cost_price ?? 0);
-    return s + (Number(item.selling_price) - cost) * item.quantity;
-  }, 0);
+  const monthlyTotals = calculateProfitTotals(monthlySalesRes.data ?? [], monthSaleItemsData, returnedItems);
 
   const inventoryValue = (inventoryRes.data ?? []).reduce(
     (s, v) => s + Number(v.cost_price) * Number(v.stock_quantity),
@@ -157,10 +145,10 @@ export async function getDashboardCards(): Promise<DashboardCards> {
 
   return {
     todaySales: (todaySalesRes.data ?? []).length,
-    todayRevenue,
-    todayProfit,
-    monthlyRevenue,
-    monthlyProfit,
+    todayRevenue: todayTotals.revenue,
+    todayProfit: todayTotals.profit,
+    monthlyRevenue: monthlyTotals.revenue,
+    monthlyProfit: monthlyTotals.profit,
     totalProducts: productsRes.count ?? 0,
     totalCustomers: customersRes.count ?? 0,
     totalSuppliers: suppliersRes.count ?? 0,
@@ -194,7 +182,7 @@ export async function getSalesTrend(filter: SalesTrendFilter): Promise<TrendPoin
   const { data } = await supabase
     .from('sales')
     .select('created_at, total_amount')
-    .eq('status', 'completed')
+    .in('status', ['completed', 'partially_returned', 'fully_returned'])
     .gte('created_at', fromDate.toISOString())
     .order('created_at', { ascending: true });
 
@@ -250,29 +238,31 @@ export async function getRevenueProfitTrend(): Promise<RevenueProfitPoint[]> {
   const { data: salesData } = await supabase
     .from('sales')
     .select('id, created_at, total_amount')
-    .eq('status', 'completed')
+    .in('status', ['completed', 'partially_returned', 'fully_returned'])
     .gte('created_at', from.toISOString())
     .order('created_at', { ascending: true });
 
   const sales = (salesData ?? []) as Array<{ id: string; created_at: string; total_amount: number }>;
 
-  const { data: itemsData } = await supabase
-    .from('sale_items')
-    .select('sale_id, quantity, selling_price, cost_price, is_instant_sale, variant:product_variants(cost_price)')
-    .in('sale_id', sales.map((sale) => sale.id));
-
-  type ItemRow = { sale_id: string; quantity: number; selling_price: number; cost_price: number | null; is_instant_sale: boolean | null; variant: { cost_price: number } | null };
-  const items = (itemsData ?? []) as unknown as ItemRow[];
-
-  // Map sale_id -> profit
-  const saleProfit = new Map<string, number>();
-  for (const item of items) {
-    const prev = saleProfit.get(item.sale_id) ?? 0;
-    const profit = item.is_instant_sale
-      ? (Number(item.selling_price) - Number(item.cost_price ?? 0)) * item.quantity
-      : (Number(item.selling_price) - Number(item.variant?.cost_price ?? 0)) * item.quantity;
-    saleProfit.set(item.sale_id, prev + profit);
-  }
+  const saleIds = sales.map((sale) => sale.id);
+  const [itemsResult, returnsResult] = saleIds.length ? await Promise.all([
+    supabase.from('sale_items')
+      .select('sale_id, quantity, cost_price_at_sale, cost_price')
+      .in('sale_id', saleIds),
+    supabase.from('sales_return_items')
+      .select('quantity_returned, return_total, cost_price_at_sale, return:sales_returns!inner(sale_id, status)')
+      .in('return.sale_id', saleIds)
+      .eq('return.status', 'completed'),
+  ]) : [{ data: [] }, { data: [] }];
+  const items = (itemsResult.data ?? []) as unknown as ProfitSaleItem[];
+  type TrendReturnRow = Omit<ProfitReturnItem, 'sale_id'> & { return: { sale_id: string } | null };
+  const returnedItems = ((returnsResult.data ?? []) as unknown as TrendReturnRow[])
+    .filter((item) => item.return?.sale_id)
+    .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
+  const saleItems = new Map<string, ProfitSaleItem[]>();
+  const saleReturns = new Map<string, ProfitReturnItem[]>();
+  for (const item of items) saleItems.set(item.sale_id, [...(saleItems.get(item.sale_id) ?? []), item]);
+  for (const item of returnedItems) saleReturns.set(item.sale_id, [...(saleReturns.get(item.sale_id) ?? []), item]);
 
   const map = new Map<string, { revenue: number; profit: number }>();
   for (let i = 29; i >= 0; i--) {
@@ -286,10 +276,8 @@ export async function getRevenueProfitTrend(): Promise<RevenueProfitPoint[]> {
     const key = new Date(s.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
     if (map.has(key)) {
       const prev = map.get(key)!;
-      map.set(key, {
-        revenue: prev.revenue + Number(s.total_amount),
-        profit: prev.profit + (saleProfit.get(s.id) ?? 0),
-      });
+      const totals = calculateProfitTotals([s], saleItems.get(s.id) ?? [], saleReturns.get(s.id) ?? []);
+      map.set(key, { revenue: prev.revenue + totals.revenue, profit: prev.profit + totals.profit });
     }
   }
 

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { Customer, Product, ProductVariant, Purchase, Sale, SaleItem, Supplier, SupplierPayment } from '../types';
+import { calculateProfitTotals, getHistoricalUnitCost } from '../utils/profitCalculation';
 
 export type ReportRange = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'custom';
 
@@ -97,11 +98,12 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     productsResult,
     customersResult,
     salesItemsResult,
+    returnedItemsResult,
   ] = await Promise.all([
     supabase
       .from('sales')
       .select('*, customer:customers(*), cashier:profiles(full_name)')
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_returned', 'fully_returned'])
       .order('created_at', { ascending: false }),
     supabase
       .from('product_variants')
@@ -112,14 +114,22 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     supabase
       .from('sale_items')
       .select('*, variant:product_variants(*, product:products(*, category:categories(*)))'),
+    supabase
+      .from('sales_return_items')
+      .select('quantity_returned,return_total,cost_price_at_sale,return:sales_returns!inner(sale_id,status)')
+      .eq('return.status', 'completed'),
   ]);
 
   const sales = ((salesResult.data as Array<Sale & { customer: Customer | null; cashier: { full_name: string | null } | null }>) ?? [])
-    .filter((sale) => sale.status === 'completed');
+    .filter((sale) => ['completed', 'partially_returned', 'fully_returned'].includes(sale.status));
   const variants = (variantsResult.data as Array<ProductVariant & { product: Product & { category?: { name: string } | null } }>) ?? [];
   const products = (productsResult.data as Product[]) ?? [];
   const customers = (customersResult.data as Customer[]) ?? [];
   const saleItems = (salesItemsResult.data as Array<SaleItem & { variant: (ProductVariant & { product: Product & { category?: { name: string } | null } }) | null }>) ?? [];
+  type ReturnedRow = { quantity_returned: number; return_total: number; cost_price_at_sale: number | null; return: { sale_id: string } | null };
+  const returnedItems = ((returnedItemsResult.data ?? []) as unknown as ReturnedRow[])
+    .filter((item) => item.return?.sale_id)
+    .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
 
   const todaySales = sales
     .filter((sale) => sale.created_at >= todayRange.from && sale.created_at <= todayRange.to)
@@ -127,14 +137,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const monthlySales = sales
     .filter((sale) => sale.created_at >= monthRange.from && sale.created_at <= monthRange.to)
     .reduce((sum, sale) => sum + Number(sale.total_amount), 0);
-  const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.total_amount), 0);
-
-  const saleItemProfit = saleItems.reduce((sum, item) => {
-    const cost = Number(item.is_instant_sale ? item.cost_price ?? 0 : item.variant?.cost_price ?? 0) * item.quantity;
-    return sum + (Number(item.line_total ?? 0) - cost);
-  }, 0);
-
-  const grossProfit = saleItemProfit;
+  const totals = calculateProfitTotals(sales, saleItems, returnedItems);
+  const totalRevenue = totals.revenue;
+  const grossProfit = totals.profit;
   const netProfit = grossProfit;
 
   const lowStockProducts = variants.filter((variant) => variant.stock_quantity > 0 && variant.stock_quantity < 10).slice(0, 10);
@@ -205,17 +210,21 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 export async function getReportsBundle(range: ReportRange, custom?: DateRange): Promise<ReportsBundle> {
   const dateRange = getDateRange(range, custom);
 
-  const [salesResult, saleItemsResult, variantsResult, purchasesResult, supplierPaymentsResult, customersResult, suppliersResult] = await Promise.all([
+  const [salesResult, saleItemsResult, returnedItemsResult, variantsResult, purchasesResult, supplierPaymentsResult, customersResult, suppliersResult] = await Promise.all([
     supabase
       .from('sales')
       .select('*, customer:customers(*)')
       .gte('created_at', dateRange.from)
       .lte('created_at', dateRange.to)
-      .neq('status', 'held')
+      .in('status', ['completed', 'partially_returned', 'fully_returned'])
       .order('created_at', { ascending: false }),
     supabase
       .from('sale_items')
       .select('*, variant:product_variants(*, product:products(*))'),
+    supabase
+      .from('sales_return_items')
+      .select('sale_item_id,quantity_returned,return_total,cost_price_at_sale,return:sales_returns!inner(sale_id,status)')
+      .eq('return.status', 'completed'),
     supabase
       .from('product_variants')
       .select('*, product:products(*)'),
@@ -233,26 +242,46 @@ export async function getReportsBundle(range: ReportRange, custom?: DateRange): 
     supabase.from('suppliers').select('*'),
   ]);
 
-  const sales = ((salesResult.data as Array<Sale & { customer: Customer | null }>) ?? []).filter((sale) => sale.status !== 'held');
-  const saleItems = (saleItemsResult.data as Array<SaleItem & { variant: (ProductVariant & { product: Product | null }) | null }>) ?? [];
+  const sales = (salesResult.data as Array<Sale & { customer: Customer | null }>) ?? [];
+  const selectedSaleIds = new Set(sales.map((sale) => sale.id));
+  const saleItems = ((saleItemsResult.data as Array<SaleItem & { variant: (ProductVariant & { product: Product | null }) | null }>) ?? [])
+    .filter((item) => selectedSaleIds.has(item.sale_id));
+  type ReportReturnRow = { sale_item_id: string; quantity_returned: number; return_total: number; cost_price_at_sale: number | null; return: { sale_id: string } | null };
+  const returnedItems = ((returnedItemsResult.data ?? []) as unknown as ReportReturnRow[])
+    .filter((item) => item.return?.sale_id && selectedSaleIds.has(item.return.sale_id))
+    .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
   const variants = (variantsResult.data as Array<ProductVariant & { product: Product | null }>) ?? [];
   const purchases = (purchasesResult.data as Array<Purchase & { supplier: Supplier | null }>) ?? [];
   const supplierPayments = (supplierPaymentsResult.data as SupplierPayment[]) ?? [];
   const customers = (customersResult.data as Customer[]) ?? [];
   const suppliers = (suppliersResult.data as Supplier[]) ?? [];
 
-  const salesAmount = sales.reduce((sum, sale) => sum + Number(sale.total_amount), 0);
-  const profit = saleItems.reduce((sum, item) => {
-    const cost = Number(item.is_instant_sale ? item.cost_price ?? 0 : item.variant?.cost_price ?? 0) * item.quantity;
-    return sum + Number(item.line_total ?? 0) - cost;
-  }, 0);
+  const reportTotals = calculateProfitTotals(sales, saleItems, returnedItems);
+  const salesAmount = reportTotals.revenue;
+  const profit = reportTotals.profit;
+
+  const saleById = new Map(sales.map((sale) => [sale.id, sale]));
+  const saleLineBasis = new Map<string, number>();
+  for (const item of saleItems) saleLineBasis.set(item.sale_id, (saleLineBasis.get(item.sale_id) ?? 0) + Number(item.line_total ?? 0));
+  const returnsByItem = new Map<string, { quantity: number; revenue: number }>();
+  for (const item of returnedItems) {
+    const previous = returnsByItem.get(item.sale_item_id) ?? { quantity: 0, revenue: 0 };
+    returnsByItem.set(item.sale_item_id, {
+      quantity: previous.quantity + Number(item.quantity_returned),
+      revenue: previous.revenue + Number(item.return_total),
+    });
+  }
 
   const productSalesMap = saleItems.reduce<Record<string, { quantity: number; profit: number }>>((acc, item) => {
     const label = item.product_name_snapshot ?? item.variant?.product?.name ?? 'Unknown';
-    const unitCost = Number(item.is_instant_sale ? item.cost_price ?? 0 : item.variant?.cost_price ?? 0);
-    const profitAmount = Number(item.line_total ?? 0) - unitCost * item.quantity;
+    const sale = saleById.get(item.sale_id);
+    const lineBasis = saleLineBasis.get(item.sale_id) ?? 0;
+    const allocatedRevenue = lineBasis > 0 ? Number(sale?.total_amount ?? 0) * Number(item.line_total ?? 0) / lineBasis : 0;
+    const returned = returnsByItem.get(item.id) ?? { quantity: 0, revenue: 0 };
+    const netQuantity = Math.max(Number(item.quantity) - returned.quantity, 0);
+    const profitAmount = allocatedRevenue - returned.revenue - getHistoricalUnitCost(item) * netQuantity;
     acc[label] = {
-      quantity: (acc[label]?.quantity ?? 0) + item.quantity,
+      quantity: (acc[label]?.quantity ?? 0) + netQuantity,
       profit: (acc[label]?.profit ?? 0) + profitAmount,
     };
     return acc;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Barcode, Plus, Edit2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Barcode, Plus, Edit2, Printer, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { Product, ProductVariant, Category, Brand, StoreSettings } from '../types';
 import * as productService from '../services/productService';
@@ -9,6 +9,7 @@ import * as brandService from '../services/brandService';
 import { getStoreSettings } from '../services/settingsService';
 import {
   getBarcodePrintDensity,
+  printBarcodeLabelBatch,
   printBarcodeLabels,
 } from '../services/barcodeLabelPrintService';
 import { getErrorMessage } from '../utils/errors';
@@ -22,6 +23,10 @@ import {
   Modal,
   PageHeader,
 } from '../components/ui';
+import {
+  BulkBarcodePrintModal,
+  type BulkBarcodeSelection,
+} from '../components/barcode/BulkBarcodePrintModal';
 
 interface VariantFormInputs {
   size: string;
@@ -54,6 +59,9 @@ export function ProductDetail() {
   const [printerSettingsReady, setPrinterSettingsReady] = useState(false);
   const [printerSettingsError, setPrinterSettingsError] = useState<string | null>(null);
   const [printingVariantId, setPrintingVariantId] = useState<string | null>(null);
+  const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
+  const [bulkPrinting, setBulkPrinting] = useState(false);
+  const [bulkPrintError, setBulkPrintError] = useState<string | null>(null);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<VariantFormInputs>();
 
   const fetchData = useCallback(async () => {
@@ -201,6 +209,52 @@ export function ProductDetail() {
     }
   };
 
+  const handleBulkPrint = (selections: BulkBarcodeSelection[]) => {
+    if (!product || bulkPrinting) return;
+    if (!printerSettingsReady) {
+      setBulkPrintError(printerSettingsError ?? 'Barcode printer settings are still loading.');
+      return;
+    }
+
+    setBulkPrintError(null);
+    setBulkPrinting(true);
+    const articleNumber = product.item_article || product.item_number || product.code || undefined;
+
+    try {
+      const printResult = printBarcodeLabelBatch(
+        selections.map(({ variant, copies }) => ({
+          barcodeNumber: variant.barcode_number?.trim() ?? '',
+          articleNumber,
+          colour: variant.color,
+          size: variant.size,
+          sellingPrice: variant.selling_price,
+          costPrice: variant.cost_price,
+          copies,
+        })),
+        {
+          density: getBarcodePrintDensity(),
+          barcodeWidth: Number(printerSettings?.barcode_width ?? DEFAULT_BARCODE_WIDTH),
+          barcodeHeight: Number(printerSettings?.barcode_height ?? DEFAULT_BARCODE_HEIGHT),
+          horizontalOffsetMm: Number(printerSettings?.barcode_horizontal_offset_mm ?? 0),
+          verticalOffsetMm: Number(printerSettings?.barcode_vertical_offset_mm ?? 0),
+        },
+      );
+
+      void printResult.then(() => {
+        setShowBulkPrintModal(false);
+      }).catch((printError: unknown) => {
+        console.error('Bulk barcode label printing failed:', printError);
+        setBulkPrintError(getPrintErrorMessage(printError));
+      }).finally(() => {
+        setBulkPrinting(false);
+      });
+    } catch (printError) {
+      console.error('Bulk barcode label printing failed:', printError);
+      setBulkPrintError(getPrintErrorMessage(printError));
+      setBulkPrinting(false);
+    }
+  };
+
   const handleDeleteVariant = async (variantId: string) => {
     if (!confirm('Delete this variant?')) return;
     const { error: deleteError } = await productService.deleteVariant(variantId);
@@ -253,12 +307,22 @@ export function ProductDetail() {
         </div>
 
         <div className="min-w-0 max-w-full space-y-4 lg:col-span-2">
-          <div className="flex min-w-0 items-center justify-between">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-dashboard-text-primary">Variants</h3>
-            <Button onClick={() => { setEditingVariantId(null); reset(); setShowModal(true); }}>
-              <Plus size={18} />
-              Add Variant
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="secondary"
+                disabled={variants.length === 0 || printingVariantId !== null}
+                onClick={() => { setBulkPrintError(null); setShowBulkPrintModal(true); }}
+              >
+                <Printer size={18} />
+                Print All Barcodes
+              </Button>
+              <Button onClick={() => { setEditingVariantId(null); reset(); setShowModal(true); }}>
+                <Plus size={18} />
+                Add Variant
+              </Button>
+            </div>
           </div>
 
           <DataTable
@@ -338,6 +402,21 @@ export function ProductDetail() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {showBulkPrintModal && (
+        <BulkBarcodePrintModal
+          product={product}
+          variants={variants}
+          isPrinting={bulkPrinting}
+          error={bulkPrintError}
+          onClose={() => {
+            if (bulkPrinting) return;
+            setShowBulkPrintModal(false);
+            setBulkPrintError(null);
+          }}
+          onPrint={handleBulkPrint}
+        />
       )}
     </div>
   );

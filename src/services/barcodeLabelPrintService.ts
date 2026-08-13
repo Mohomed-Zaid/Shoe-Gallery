@@ -18,6 +18,25 @@ export interface BarcodeLabelPrintOptions {
   density?: BarcodePrintDensity;
 }
 
+export interface BarcodeLabelBatchItem {
+  barcodeNumber: string;
+  articleNumber?: string;
+  colour?: string;
+  size?: string;
+  sellingPrice?: number | null;
+  costPrice?: number | string | null;
+  copies?: number;
+}
+
+export type BarcodeLabelBatchOptions = Pick<
+  BarcodeLabelPrintOptions,
+  | 'horizontalOffsetMm'
+  | 'verticalOffsetMm'
+  | 'barcodeWidth'
+  | 'barcodeHeight'
+  | 'density'
+>;
+
 export type BarcodePrintDensity = 'normal' | 'dark' | 'extra-dark';
 
 interface BarcodeGenerationOptions {
@@ -211,6 +230,33 @@ export async function printBarcodeLabels(
   const sellingPrice = Number(options.sellingPrice);
   if (!Number.isFinite(sellingPrice)) throw new Error('Selling price is required.');
 
+  return printBarcodeLabelBatch(
+    [{
+      barcodeNumber: value,
+      articleNumber: options.articleNumber,
+      colour: options.colour,
+      size: options.size,
+      sellingPrice,
+      costPrice: options.costPrice,
+      copies: options.copies,
+    }],
+    options,
+  );
+}
+
+export async function printBarcodeLabelBatch(
+  items: BarcodeLabelBatchItem[],
+  options: BarcodeLabelBatchOptions = {},
+): Promise<void> {
+  if (items.length === 0) throw new Error('Select at least one barcode to print.');
+  const normalisedItems = items.map((item) => ({
+    ...item,
+    barcodeNumber: item.barcodeNumber.trim(),
+  }));
+  if (normalisedItems.some((item) => !item.barcodeNumber)) {
+    throw new Error('Barcode number is required.');
+  }
+
   if (activePrintWindow) {
     try {
       if (!activePrintWindow.closed) {
@@ -238,37 +284,39 @@ export async function printBarcodeLabels(
   }
   activePrintWindow = printWindow;
 
-  let svgMarkup: string;
+  const density = options.density ?? getBarcodePrintDensity();
+  let labels: string;
   try {
-    svgMarkup = generateBarcodeSvg(value, {
-      density: options.density ?? getBarcodePrintDensity(),
-      height: options.barcodeHeight,
-      widthScale: options.barcodeWidth,
-    });
+    labels = normalisedItems.map((item) => {
+      const svgMarkup = generateBarcodeSvg(item.barcodeNumber, {
+        density,
+        height: options.barcodeHeight,
+        widthScale: options.barcodeWidth,
+      });
+      const escapedNumber = escapeHtml(item.barcodeNumber);
+      const escapedArticleNumber = escapeHtml(item.articleNumber?.trim() || '');
+      const escapedColour = escapeHtml(getColourShortName(item.colour));
+      const escapedSize = escapeHtml(item.size?.trim() || '');
+      const headingMarkup = `<span class="barcode-heading-article">${escapedArticleNumber}</span><span>${escapedColour}</span><span>${escapedSize}</span>`;
+      const hasSellingPrice = typeof item.sellingPrice === 'number' && Number.isFinite(item.sellingPrice);
+      const escapedSellingPrice = hasSellingPrice
+        ? escapeHtml(formatBarcodeLabelPrice(item.sellingPrice as number))
+        : '-';
+      const costCode = item.costPrice == null ? '' : encodeCostPrice(item.costPrice);
+      const escapedCostCode = escapeHtml(costCode);
+      const costCodeMarkup = escapedCostCode
+        ? `<span class="barcode-cost-code">${escapedCostCode}</span>`
+        : '';
+      const labelMarkup = `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-label-header">${headingMarkup}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-meta-row"><span class="barcode-number">${escapedNumber}</span>${costCodeMarkup}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`;
+
+      return Array.from({ length: normaliseCopies(item.copies) }, () => labelMarkup).join('');
+    }).join('');
   } catch (error) {
     closeWindow(printWindow);
     if (error instanceof Error && error.message === BARCODE_GENERATION_ERROR) throw error;
     throw new Error(BARCODE_GENERATION_ERROR);
   }
 
-  const copies = normaliseCopies(options.copies);
-  const escapedNumber = escapeHtml(value);
-  const escapedArticleNumber = escapeHtml(options.articleNumber?.trim() || '');
-  const escapedColour = escapeHtml(getColourShortName(options.colour));
-  const escapedSize = escapeHtml(options.size?.trim() || '');
-  const headingMarkup = `<span class="barcode-heading-article">${escapedArticleNumber}</span><span>${escapedColour}</span><span>${escapedSize}</span>`;
-  const escapedSellingPrice = escapeHtml(formatBarcodeLabelPrice(sellingPrice));
-  const costCode = options.costPrice == null ? '' : encodeCostPrice(options.costPrice);
-  const escapedCostCode = escapeHtml(costCode);
-  const costCodeMarkup = escapedCostCode
-    ? `<span class="barcode-cost-code">${escapedCostCode}</span>`
-    : '';
-  const density = options.density ?? getBarcodePrintDensity();
-  const labels = Array.from(
-    { length: copies },
-    () =>
-      `<section class="barcode-page"><div class="barcode-label barcode-density-${density}"><div class="barcode-label-header">${headingMarkup}</div><div class="barcode-label-body"><div class="barcode-label-main"><div class="barcode-svg-wrapper">${svgMarkup}</div><div class="barcode-meta-row"><span class="barcode-number">${escapedNumber}</span>${costCodeMarkup}</div><div class="barcode-label-price">${escapedSellingPrice}</div></div></div></div></section>`,
-  ).join('');
   const horizontalOffset = boundedNumber(options.horizontalOffsetMm, 0, -3, 3);
   const verticalOffset = boundedNumber(options.verticalOffsetMm, 0, -3, 3);
   const popupCss = `
