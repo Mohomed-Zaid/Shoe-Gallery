@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Barcode, Printer } from 'lucide-react';
 import type { Product, ProductVariant } from '../../types';
+import { compareProductVariants } from '../../utils/variantSorting';
 import { Button, Modal } from '../ui';
 
 export interface BulkBarcodeSelection {
@@ -19,14 +20,6 @@ interface BulkBarcodePrintModalProps {
 
 type PrintMode = 'one-per-variant' | 'custom';
 
-const variantCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-
-function sortVariants(left: ProductVariant, right: ProductVariant) {
-  return variantCollator.compare(left.size, right.size)
-    || variantCollator.compare(left.color, right.color)
-    || variantCollator.compare(left.barcode_number ?? '', right.barcode_number ?? '');
-}
-
 function hasBarcode(variant: ProductVariant) {
   return Boolean(variant.barcode_number?.trim());
 }
@@ -39,7 +32,7 @@ export function BulkBarcodePrintModal({
   onClose,
   onPrint,
 }: BulkBarcodePrintModalProps) {
-  const sortedVariants = useMemo(() => [...variants].sort(sortVariants), [variants]);
+  const sortedVariants = useMemo(() => [...variants].sort(compareProductVariants), [variants]);
   const printableVariants = useMemo(() => sortedVariants.filter(hasBarcode), [sortedVariants]);
   const missingBarcodeVariants = useMemo(() => sortedVariants.filter((variant) => !hasBarcode(variant)), [sortedVariants]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(

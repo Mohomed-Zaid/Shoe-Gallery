@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Barcode, Plus, Edit2, Printer, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -14,6 +14,7 @@ import {
 } from '../services/barcodeLabelPrintService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency, formatDate } from '../utils/format';
+import { compareProductVariants } from '../utils/variantSorting';
 import {
   Alert,
   Button,
@@ -63,6 +64,7 @@ export function ProductDetail() {
   const [bulkPrinting, setBulkPrinting] = useState(false);
   const [bulkPrintError, setBulkPrintError] = useState<string | null>(null);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<VariantFormInputs>();
+  const sortedVariants = useMemo(() => [...variants].sort(compareProductVariants), [variants]);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -339,7 +341,7 @@ export function ProductDetail() {
             isEmpty={variants.length === 0}
             emptyMessage="No variants yet"
           >
-            {variants.map((variant) => (
+            {sortedVariants.map((variant) => (
               <tr key={variant.id} className="hover:bg-dashboard-hover">
                 <td title={variant.size} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] font-medium text-dashboard-text-primary 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.size}</td>
                 <td title={variant.color} className="overflow-hidden text-ellipsis whitespace-nowrap px-2 py-2.5 text-[13px] text-dashboard-text-sub 2xl:px-4 2xl:py-4 2xl:text-sm">{variant.color}</td>
