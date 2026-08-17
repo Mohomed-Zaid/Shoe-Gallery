@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { calculateProfitTotals, type ProfitReturnItem, type ProfitSaleItem } from '../utils/profitCalculation';
 
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export type SalesTrendFilter = 'today' | '7d' | '30d' | 'month' | 'year';
@@ -68,11 +69,6 @@ function startOfDay(d: Date) {
   c.setHours(0, 0, 0, 0);
   return c;
 }
-function endOfDay(d: Date) {
-  const c = new Date(d);
-  c.setHours(23, 59, 59, 999);
-  return c;
-}
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
 }
@@ -81,79 +77,22 @@ function startOfMonth(d: Date) {
 
 export async function getDashboardCards(): Promise<DashboardCards> {
   const now = new Date();
-  const todayStart = startOfDay(now).toISOString();
-  const todayEnd = endOfDay(now).toISOString();
-  const monthStart = startOfMonth(now).toISOString();
-
-  const [
-    todaySalesRes,
-    monthlySalesRes,
-    productsRes,
-    customersRes,
-    suppliersRes,
-    inventoryRes,
-    saleItemsRes,
-    returnedItemsRes,
-  ] = await Promise.all([
-    supabase
-      .from('sales')
-      .select('id, total_amount')
-      .in('status', ['completed', 'partially_returned', 'fully_returned'])
-      .gte('created_at', todayStart)
-      .lte('created_at', todayEnd),
-    supabase
-      .from('sales')
-      .select('id, total_amount')
-      .in('status', ['completed', 'partially_returned', 'fully_returned'])
-      .gte('created_at', monthStart),
+  const today = now.toLocaleDateString('en-CA');
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('en-CA');
+  const [todayResult, monthResult, products, customers, suppliers, inventory] = await Promise.all([
+    supabase.rpc('get_profit_dashboard_summary', { p_start_date: today, p_end_date: today }),
+    supabase.rpc('get_profit_dashboard_summary', { p_start_date: monthStart, p_end_date: today }),
     supabase.from('products').select('id', { count: 'exact', head: true }),
     supabase.from('customers').select('id', { count: 'exact', head: true }),
     supabase.from('suppliers').select('id', { count: 'exact', head: true }),
     supabase.from('product_variants').select('cost_price, stock_quantity'),
-    supabase
-      .from('sale_items')
-      .select(`
-        sale_id,
-        quantity,
-        cost_price_at_sale,
-        cost_price
-      `),
-    supabase
-      .from('sales_return_items')
-      .select('quantity_returned, return_total, cost_price_at_sale, return:sales_returns!inner(sale_id, status)')
-      .eq('return.status', 'completed'),
   ]);
-
-  const allSaleItemsData = (saleItemsRes.data ?? []) as unknown as ProfitSaleItem[];
-  type ReturnedItemRow = Omit<ProfitReturnItem, 'sale_id'> & { return: { sale_id: string } | null };
-  const returnedItems = ((returnedItemsRes.data ?? []) as unknown as ReturnedItemRow[])
-    .filter((item) => item.return?.sale_id)
-    .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
-  const todaySaleIds = new Set((todaySalesRes.data ?? []).map((sale) => sale.id));
-  const monthSaleIds = new Set((monthlySalesRes.data ?? []).map((sale) => sale.id));
-  const todaySaleItemsData = allSaleItemsData.filter((item) => todaySaleIds.has(item.sale_id));
-  const todayTotals = calculateProfitTotals(todaySalesRes.data ?? [], todaySaleItemsData, returnedItems);
-
-  // Monthly profit — fetch separately for the month
-  const monthSaleItemsData = allSaleItemsData.filter((item) => monthSaleIds.has(item.sale_id));
-  const monthlyTotals = calculateProfitTotals(monthlySalesRes.data ?? [], monthSaleItemsData, returnedItems);
-
-  const inventoryValue = (inventoryRes.data ?? []).reduce(
-    (s, v) => s + Number(v.cost_price) * Number(v.stock_quantity),
-    0
-  );
-
-  return {
-    todaySales: (todaySalesRes.data ?? []).length,
-    todayRevenue: todayTotals.revenue,
-    todayProfit: todayTotals.profit,
-    monthlyRevenue: monthlyTotals.revenue,
-    monthlyProfit: monthlyTotals.profit,
-    totalProducts: productsRes.count ?? 0,
-    totalCustomers: customersRes.count ?? 0,
-    totalSuppliers: suppliersRes.count ?? 0,
-    inventoryValue,
-  };
+  if (todayResult.error) throw todayResult.error;
+  if (monthResult.error) throw monthResult.error;
+  const todayTotals = (todayResult.data ?? {}) as { revenue?: number; profit?: number; sales?: number };
+  const monthTotals = (monthResult.data ?? {}) as { revenue?: number; profit?: number };
+  const inventoryValue = (inventory.data ?? []).reduce((sum, variant) => sum + Number(variant.cost_price) * Number(variant.stock_quantity), 0);
+  return { todaySales: Number(todayTotals.sales ?? 0), todayRevenue: Number(todayTotals.revenue ?? 0), todayProfit: Number(todayTotals.profit ?? 0), monthlyRevenue: Number(monthTotals.revenue ?? 0), monthlyProfit: Number(monthTotals.profit ?? 0), totalProducts: products.count ?? 0, totalCustomers: customers.count ?? 0, totalSuppliers: suppliers.count ?? 0, inventoryValue };
 }
 
 // ─── Sales Trend ─────────────────────────────────────────────────────────────

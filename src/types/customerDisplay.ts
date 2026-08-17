@@ -1,0 +1,62 @@
+export const CUSTOMER_DISPLAY_CHANNEL = 'shoe-gallery-pos-display';
+export const CUSTOMER_DISPLAY_STORAGE_KEY = 'shoe-gallery-pos-display-event';
+
+export interface CustomerDisplayItem {
+  id: string;
+  productName: string;
+  size: string;
+  colour: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  lineTotal: number;
+}
+
+export interface CustomerDisplaySnapshot {
+  storeName: string;
+  storeAddress: string | null;
+  customerName: string | null;
+  items: CustomerDisplayItem[];
+  subtotal: number;
+  itemDiscount: number;
+  saleDiscount: number;
+  paymentFee: number;
+  grandTotal: number;
+  paymentMethod: 'cash' | 'card' | 'bank_transfer' | 'credit';
+  amountReceived: number;
+  changeDue: number;
+}
+
+export interface CustomerDisplaySaleCompleted {
+  storeName: string;
+  grandTotal: number;
+  amountReceived: number;
+  changeDue: number;
+}
+
+export type CustomerDisplayMessage =
+  | { type: 'STATE_REQUEST' }
+  | { type: 'STATE_UPDATE'; payload: CustomerDisplaySnapshot }
+  | { type: 'SALE_COMPLETED'; payload: CustomerDisplaySaleCompleted };
+
+export function sendCustomerDisplayFallback(message: CustomerDisplayMessage) {
+  try {
+    localStorage.setItem(
+      CUSTOMER_DISPLAY_STORAGE_KEY,
+      JSON.stringify({ message, sentAt: Date.now(), nonce: Math.random() }),
+    );
+    localStorage.removeItem(CUSTOMER_DISPLAY_STORAGE_KEY);
+  } catch {
+    // BroadcastChannel remains the primary transport.
+  }
+}
+
+export function readCustomerDisplayFallback(value: string | null): CustomerDisplayMessage | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as { message?: CustomerDisplayMessage };
+    return parsed.message ?? null;
+  } catch {
+    return null;
+  }
+}

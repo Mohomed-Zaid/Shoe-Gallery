@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
@@ -32,21 +32,31 @@ import { SubscriptionManagementPage } from './pages/admin/SubscriptionManagement
 import { LoadingSpinner } from './components/ui';
 import { PWAStatus } from './components/pwa/PWAStatus';
 import { ReportsHomePage } from './pages/ReportsHomePage';
-import { ReportPlaceholderPage } from './pages/ReportPlaceholderPage';
 import { InvoiceSalesReportPage } from './pages/InvoiceSalesReportPage';
+import { PurchaseReportPage } from './pages/PurchaseReportPage';
+import { InventoryReportPage } from './pages/InventoryReportPage';
+import { ReturnsReportPage } from './pages/ReturnsReportPage';
+import { ProfitReportPage } from './pages/ProfitReportPage';
+import { CashupReportPage } from './pages/CashupReportPage';
+import { CustomerDisplay } from './pages/CustomerDisplay';
 
 const BarcodePrinting = lazy(() => import('./pages/BarcodePrinting').then((module) => ({ default: module.BarcodePrinting })));
 const POS = lazy(() => import('./pages/POS').then((module) => ({ default: module.POS })));
 
+function RouteAwarePWAStatus() {
+  return useLocation().pathname === '/customer-display' ? null : <PWAStatus />;
+}
+
 function App() {
   return (
     <ThemeProvider>
-      <PWAStatus />
       <BrowserRouter>
+        <RouteAwarePWAStatus />
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/subscription-expired" element={<ProtectedRoute><SubscriptionGuard><SubscriptionExpiredPage /></SubscriptionGuard></ProtectedRoute>} />
+            <Route path="/customer-display" element={<ProtectedRoute><SubscriptionGuard><CustomerDisplay /></SubscriptionGuard></ProtectedRoute>} />
             <Route
               path="/*"
               element={
@@ -77,11 +87,11 @@ function App() {
                       <Route path="/returns/:id" element={<SalesReturnDetailsPage />} />
                       <Route path="/reports" element={<ReportsHomePage />} />
                       <Route path="/reports/sales" element={<InvoiceSalesReportPage />} />
-                      <Route path="/reports/purchases" element={<ReportPlaceholderPage title="Purchase Report" />} />
-                      <Route path="/reports/inventory" element={<ReportPlaceholderPage title="Inventory Report" />} />
-                      <Route path="/reports/returns" element={<ReportPlaceholderPage title="Returns Report" />} />
-                      <Route path="/reports/profit" element={<ReportPlaceholderPage title="Profit Report" />} />
-                      <Route path="/reports/cashup" element={<ReportPlaceholderPage title="Cashup Report" />} />
+                      <Route path="/reports/purchases" element={<ProtectedRoute allowedRoles={['admin']}><PurchaseReportPage /></ProtectedRoute>} />
+                      <Route path="/reports/inventory" element={<InventoryReportPage />} />
+                      <Route path="/reports/returns" element={<ReturnsReportPage />} />
+                      <Route path="/reports/profit" element={<ProfitReportPage />} />
+              <Route path="/reports/cashup" element={<CashupReportPage />} />
                       <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><Settings /></ProtectedRoute>} />
                       <Route path="/admin/subscription" element={<SubscriptionManagementPage />} />
                       <Route path="*" element={<Navigate to="/" replace />} />

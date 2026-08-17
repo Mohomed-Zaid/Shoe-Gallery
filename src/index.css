@@ -623,6 +623,44 @@
   display: none;
 }
 
+.purchase-report-page {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.purchase-report-table {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+.inventory-report-page {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.inventory-report-table {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+.returns-report-page {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.returns-report-table {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+.profit-report-page { min-width: 0; max-width: 100%; overflow-x: hidden; }
+.profit-report-table { max-width: 100%; overscroll-behavior-x: contain; }
+.cashup-report-page { min-width: 0; max-width: 100%; overflow-x: hidden; }
+.cashup-report-table { max-width: 100%; overscroll-behavior-x: contain; }
+
 @media print {
   /* ── Global reset ── */
   * {
@@ -766,6 +804,69 @@
     color: #1e293b;
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   }
+
+  .purchase-report-page > :not(.purchase-report-print) {
+    display: none !important;
+  }
+
+  .purchase-report-print {
+    display: block !important;
+  }
+
+  .purchase-report-print .report-kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+    margin-bottom: 14pt;
+  }
+
+  .purchase-report-print .report-kpi-value {
+    font-size: 9pt;
+  }
+
+  .inventory-report-page > :not(.inventory-report-print) {
+    display: none !important;
+  }
+
+  .inventory-report-print {
+    display: block !important;
+  }
+
+  .inventory-report-print .report-kpi-grid {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4pt;
+    margin-bottom: 12pt;
+  }
+
+  .inventory-report-print .report-kpi {
+    padding: 6pt 4pt;
+  }
+
+  .inventory-report-print .report-kpi-value {
+    font-size: 8pt;
+  }
+
+  .returns-report-page > :not(.returns-report-print) {
+    display: none !important;
+  }
+
+  .returns-report-print {
+    display: block !important;
+  }
+
+  .returns-report-print .report-kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+    margin-bottom: 12pt;
+  }
+
+  .returns-report-print .report-kpi-value {
+    font-size: 9pt;
+  }
+
+  .profit-report-page > :not(.profit-report-print) { display: none !important; }
+  .profit-report-print { display: block !important; }
+  .profit-report-print .grid { display: grid !important; grid-template-columns: repeat(4, 1fr); margin-bottom: 12pt; }
+  .cashup-report-page > :not(.cashup-report-print) { display: none !important; }
+  .cashup-report-print { display: block !important; }
+  .cashup-report-print .grid { display: grid !important; grid-template-columns: repeat(4, 1fr); margin-bottom: 12pt; }
 
   .business-report-print-area * {
     color: #1e293b !important;

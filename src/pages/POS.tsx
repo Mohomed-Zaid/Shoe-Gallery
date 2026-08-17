@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, CreditCard, LayoutGrid, Minus, Package2, Plus, Printer, ScanLine, Search, Trash2, Zap } from 'lucide-react';
+import { ChevronDown, CreditCard, LayoutGrid, Minus, Monitor, Package2, Plus, Printer, ScanLine, Search, Trash2, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import type { Category, Customer, Product, ProductVariant, StoreSettings } from '../types';
@@ -26,6 +26,14 @@ import { ProductVariantSelector } from '../components/pos/ProductVariantSelector
 import type { POSProduct } from '../services/productService';
 import { ThermalReceipt } from '../components/receipt/ThermalReceipt';
 import { printReceiptAutomatically } from '../services/receiptPrintService';
+import {
+  CUSTOMER_DISPLAY_CHANNEL,
+  CUSTOMER_DISPLAY_STORAGE_KEY,
+  readCustomerDisplayFallback,
+  sendCustomerDisplayFallback,
+  type CustomerDisplayMessage,
+  type CustomerDisplaySnapshot,
+} from '../types/customerDisplay';
 
 interface ProductWithCategory extends Product {
   category: Category | null;
@@ -108,6 +116,9 @@ export function POS() {
   const checkoutInProgressRef = useRef(false);
   const automaticallyPrintedSaleIdsRef = useRef(new Set<string>());
   const latestCompletedSaleIdRef = useRef<string | null>(null);
+  const customerDisplayChannelRef = useRef<BroadcastChannel | null>(null);
+  const customerDisplayWindowRef = useRef<Window | null>(null);
+  const latestCustomerDisplaySnapshotRef = useRef<CustomerDisplaySnapshot | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -182,6 +193,97 @@ export function POS() {
   const cardPaymentFee = paymentMethod === 'card' ? salesService.calculateCardPaymentFee(totalAfterDiscount) : 0;
   const grandTotal = totalAfterDiscount + cardPaymentFee;
   const changeDue = paymentMethod === 'cash' ? Math.max(amountReceived - grandTotal, 0) : 0;
+
+  const customerDisplaySnapshot = useMemo<CustomerDisplaySnapshot>(() => ({
+    storeName: storeSettings?.store_name || 'SHOE GALLERY',
+    storeAddress: storeSettings?.address ?? null,
+    customerName: selectedCustomer?.name ?? null,
+    items: cart.map((item) => ({
+      id: item.variant_id,
+      productName: item.product_name,
+      size: item.size,
+      colour: item.color,
+      quantity: item.quantity,
+      unitPrice: item.unit_price,
+      discount: item.discount_amount,
+      lineTotal: item.unit_price * item.quantity - item.discount_amount,
+    })),
+    subtotal,
+    itemDiscount: lineDiscountTotal,
+    saleDiscount: cartDiscount,
+    paymentFee: cardPaymentFee,
+    grandTotal,
+    paymentMethod,
+    amountReceived,
+    changeDue,
+  }), [
+    amountReceived,
+    cardPaymentFee,
+    cart,
+    cartDiscount,
+    changeDue,
+    grandTotal,
+    lineDiscountTotal,
+    paymentMethod,
+    selectedCustomer?.name,
+    storeSettings?.address,
+    storeSettings?.store_name,
+    subtotal,
+  ]);
+  latestCustomerDisplaySnapshotRef.current = customerDisplaySnapshot;
+
+  const broadcastCustomerDisplay = useCallback((message: CustomerDisplayMessage) => {
+    if (customerDisplayChannelRef.current) {
+      customerDisplayChannelRef.current.postMessage(message);
+      return;
+    }
+    sendCustomerDisplayFallback(message);
+  }, []);
+
+  useEffect(() => {
+    const respondToRequest = (message: CustomerDisplayMessage) => {
+      if (message.type === 'STATE_REQUEST' && latestCustomerDisplaySnapshotRef.current) {
+        broadcastCustomerDisplay({ type: 'STATE_UPDATE', payload: latestCustomerDisplaySnapshotRef.current });
+      }
+    };
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel(CUSTOMER_DISPLAY_CHANNEL);
+      customerDisplayChannelRef.current = channel;
+      channel.onmessage = (event: MessageEvent<CustomerDisplayMessage>) => respondToRequest(event.data);
+      return () => {
+        channel.close();
+        customerDisplayChannelRef.current = null;
+      };
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== CUSTOMER_DISPLAY_STORAGE_KEY) return;
+      const message = readCustomerDisplayFallback(event.newValue);
+      if (message) respondToRequest(message);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [broadcastCustomerDisplay]);
+
+  useEffect(() => {
+    broadcastCustomerDisplay({ type: 'STATE_UPDATE', payload: customerDisplaySnapshot });
+  }, [broadcastCustomerDisplay, customerDisplaySnapshot]);
+
+  const openCustomerDisplay = useCallback(() => {
+    const existingWindow = customerDisplayWindowRef.current;
+    if (existingWindow && !existingWindow.closed) {
+      existingWindow.focus();
+      return;
+    }
+
+    customerDisplayWindowRef.current = window.open(
+      '/customer-display',
+      'shoe-gallery-customer-display',
+      'popup=yes,width=1100,height=760',
+    );
+    customerDisplayWindowRef.current?.focus();
+  }, []);
 
   const playScanSuccessSound = () => {
     try {
@@ -456,6 +558,15 @@ export function POS() {
         ...variant,
         stock_quantity: Math.max(0, variant.stock_quantity - (soldQuantities[variant.id] ?? 0)),
       })));
+      broadcastCustomerDisplay({
+        type: 'SALE_COMPLETED',
+        payload: {
+          storeName: storeSettings?.store_name || 'SHOE GALLERY',
+          grandTotal,
+          amountReceived: paymentMethod === 'cash' ? amountReceived : grandTotal,
+          changeDue,
+        },
+      });
       clearCart();
       setSuccess(shouldPrintReceipt
         ? 'Sale completed successfully. Printing receipt…'
@@ -481,7 +592,7 @@ export function POS() {
       setIsCompletingSale(false);
       focusBarcodeInput();
     }
-  }, [activeHeldSaleId, amountReceived, autoPrintAfterSale, cart, cartDiscount, clearCart, focusBarcodeInput, grandTotal, maximumCartDiscount, paymentMethod, printCompletedSale, saleNotes, selectedCustomerId]);
+  }, [activeHeldSaleId, amountReceived, autoPrintAfterSale, broadcastCustomerDisplay, cart, cartDiscount, changeDue, clearCart, focusBarcodeInput, grandTotal, maximumCartDiscount, paymentMethod, printCompletedSale, saleNotes, selectedCustomerId, storeSettings?.store_name]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -544,6 +655,10 @@ export function POS() {
         description="Scan, select, and complete the sale."
         action={
           <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={openCustomerDisplay}>
+              <Monitor size={16} />
+              Customer Display
+            </Button>
             <Button variant="secondary" onClick={() => setShowInstantBillingModal(true)}>
               <Zap size={16} />
               Instant Billing
@@ -564,8 +679,8 @@ export function POS() {
         <button type="button" onClick={() => setMobilePosTab('cart')} className={`rounded-lg px-3 py-2.5 text-sm font-medium ${mobilePosTab === 'cart' ? 'bg-emerald-500 text-white' : 'text-dashboard-text-label'}`}>Cart ({cart.reduce((sum,item)=>sum+item.quantity,0)})</button>
       </div>
 
-      <div className="pos-workspace grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,.72fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
-        <div className={`pos-products-pane min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-contain ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
+      <div className="pos-workspace grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(320px,1fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.85fr)_minmax(340px,1fr)]">
+        <div className={`pos-products-pane min-h-0 min-w-0 flex flex-col gap-4 overflow-hidden ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
           <section className="glass-card overflow-visible p-5">
             <div className="relative z-10">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -600,7 +715,7 @@ export function POS() {
             </div>
           </section>
 
-          {showProductBrowser && <section className="space-y-4">
+          {showProductBrowser && <section className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto overscroll-contain pr-1">
             <div className="glass-card grid gap-3 p-4 sm:grid-cols-[1fr_220px]">
               <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name or article number" className="pl-10"/></div>
               <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select>
@@ -644,9 +759,102 @@ export function POS() {
             </div>
           )}
           </section>}
+
+          <section ref={cartRef} className="glass-card flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden p-0">
+            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[.16em] text-sky-300">Current sale items</p>
+                <p className="mt-1 text-sm text-dashboard-text-sub">Cart ({cart.reduce((sum, item) => sum + item.quantity, 0)})</p>
+              </div>
+              <button type="button" onClick={clearCart} disabled={!cart.length} className="text-xs text-red-300 transition hover:text-red-200 disabled:opacity-40">Clear</button>
+            </div>
+
+            <div className="pos-cart-items min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain">
+              {cart.length === 0 ? (
+                <div className="cart-empty flex h-full min-h-[180px] items-center justify-center p-6 text-center text-sm text-dashboard-text-sub">
+                  Add products to begin the sale.
+                </div>
+              ) : (
+                <table className="w-full min-w-[900px] table-fixed text-left text-xs">
+                  <colgroup>
+                    <col className="w-[15%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[6%]" />
+                    <col className="w-[7%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[6%]" />
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-[#0a211a] text-[10px] uppercase tracking-wider text-dashboard-text-sub">
+                    <tr>
+                      <th className="px-3 py-3 font-semibold">Item</th>
+                      <th className="px-2 py-3 font-semibold">Article</th>
+                      <th className="px-2 py-3 font-semibold">Size</th>
+                      <th className="px-2 py-3 font-semibold">Colour</th>
+                      <th className="px-2 py-3 font-semibold">Barcode</th>
+                      <th className="px-2 py-3 text-center font-semibold">Qty</th>
+                      <th className="px-2 py-3 text-right font-semibold">Price</th>
+                      <th className="px-2 py-3 font-semibold">Discount</th>
+                      <th className="px-2 py-3 text-right font-semibold">Total</th>
+                      <th className="px-2 py-3 text-center font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {cart.map((item) => (
+                      <tr key={item.variant_id} className="bg-white/[.015] align-middle transition hover:bg-white/[.04]">
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-medium text-dashboard-text-primary" title={item.product_name}>{item.product_name}</span>
+                            {item.is_instant_sale && <span className="shrink-0 rounded-full bg-dashboard-accent/20 px-1.5 py-0.5 text-[9px] font-medium text-dashboard-accent">Instant</span>}
+                          </div>
+                        </td>
+                        <td className="truncate px-2 py-3 text-dashboard-text-label" title={item.item_number || '-'}>{item.item_number || '-'}</td>
+                        <td className="truncate px-2 py-3 text-dashboard-text-label">{item.size || '-'}</td>
+                        <td className="truncate px-2 py-3 text-dashboard-text-label" title={item.color || '-'}>{item.color || '-'}</td>
+                        <td className="truncate px-2 py-3 font-mono text-[11px] text-dashboard-text-sub" title={item.barcode_number || '-'}>{item.barcode_number || '-'}</td>
+                        <td className="px-2 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button type="button" aria-label={`Decrease ${item.product_name} quantity`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-dashboard-text-primary transition hover:bg-white/10" onClick={() => updateCartQuantity(item.variant_id, item.quantity - 1)}>
+                              <Minus size={12} />
+                            </button>
+                            <span className="min-w-6 text-center font-medium text-dashboard-text-primary">{item.quantity}</span>
+                            <button type="button" aria-label={`Increase ${item.product_name} quantity`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-dashboard-text-primary transition hover:bg-white/10" onClick={() => updateCartQuantity(item.variant_id, item.quantity + 1)}>
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-3 text-right text-dashboard-text-primary">{formatCurrency(item.unit_price)}</td>
+                        <td className="px-2 py-2">
+                          <Input
+                            aria-label={`Discount for ${item.product_name}`}
+                            className="min-h-8 px-2 py-1 text-right text-xs"
+                            type="number"
+                            min="0"
+                            max={item.unit_price * item.quantity}
+                            step="0.01"
+                            value={item.discount_amount}
+                            onChange={(event) => updateItemDiscount(item.variant_id, Number(event.target.value))}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-dashboard-text-primary">{formatCurrency(item.unit_price * item.quantity - item.discount_amount)}</td>
+                        <td className="px-2 py-3 text-center">
+                          <button type="button" aria-label={`Remove ${item.product_name} from cart`} onClick={() => updateCartQuantity(item.variant_id, 0)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-300">
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
         </div>
 
-        <div ref={cartRef} className={`pos-cart-pane glass-card min-h-0 min-w-0 self-stretch overflow-hidden p-3 sm:p-4 ${mobilePosTab === 'cart' ? 'pos-pane-active' : ''}`}>
+        <div className={`pos-cart-pane glass-card min-h-0 min-w-0 self-stretch overflow-hidden p-3 sm:p-4 ${mobilePosTab === 'cart' ? 'pos-pane-active' : ''}`}>
           <div className="relative z-10 flex h-full min-h-0 flex-col gap-3">
             <div className="pos-customer-controls shrink-0 space-y-2">
               <div className="flex items-center justify-between gap-3">
@@ -682,68 +890,7 @@ export function POS() {
               </div>
             </div>
 
-            <div className="pos-cart-items min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
-              {cart.length === 0 ? (
-                <div className="cart-empty flex min-h-[75px] items-center justify-center rounded-xl border border-dashed border-white/15 p-3 text-center text-sm text-dashboard-text-sub">
-                  Add products to begin the sale.
-                </div>
-              ) : (
-                cart.map((item) => (
-                  <div key={item.variant_id} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-dashboard-text-primary">{item.product_name}</p>
-                          {item.is_instant_sale && (
-                            <span className="rounded-full bg-dashboard-accent/20 px-2 py-0.5 text-[10px] font-medium text-dashboard-accent">
-                              Instant
-                            </span>
-                          )}
-                        </div>
-                        {!item.is_instant_sale && (
-                          <p className="text-xs text-dashboard-text-sub">{item.size} / {item.color}</p>
-                        )}
-                      </div>
-                      <button type="button" onClick={() => updateCartQuantity(item.variant_id, 0)} className="text-red-400 hover:text-red-300">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-
-                    <div className="mt-2 grid gap-2 md:grid-cols-[auto_1fr_105px]">
-                      <div className="flex items-center gap-2">
-                        <button type="button" className="rounded-lg border border-white/10 p-2 text-dashboard-text-primary" onClick={() => updateCartQuantity(item.variant_id, item.quantity - 1)}>
-                          <Minus size={14} />
-                        </button>
-                        <span className="min-w-8 text-center text-dashboard-text-primary">{item.quantity}</span>
-                        <button type="button" className="rounded-lg border border-white/10 p-2 text-dashboard-text-primary" onClick={() => updateCartQuantity(item.variant_id, item.quantity + 1)}>
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                      <div className="text-sm text-dashboard-text-sub">
-                        Unit Price: <span className="text-dashboard-text-primary">{formatCurrency(item.unit_price)}</span>
-                      </div>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.discount_amount}
-                        onChange={(event) => updateItemDiscount(item.variant_id, Number(event.target.value))}
-                        placeholder="Discount"
-                      />
-                    </div>
-
-                    <div className="mt-2 flex justify-between text-sm">
-                      <span className="text-dashboard-text-sub">Line Total</span>
-                      <span className="font-medium text-dashboard-text-primary">
-                        {formatCurrency(item.unit_price * item.quantity - item.discount_amount)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="pos-checkout-controls shrink-0 space-y-2 border-t border-white/10 pt-3">
+            <div className="pos-checkout-controls mt-1 shrink-0 space-y-2 border-t border-white/10 pt-3">
               <div className={`pos-payment-grid grid gap-2 ${paymentMethod === 'cash' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div>
                   <Select label="Payment Method" className="pos-control" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as 'cash' | 'card' | 'bank_transfer' | 'credit')}>
