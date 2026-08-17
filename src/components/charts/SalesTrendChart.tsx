@@ -18,7 +18,6 @@ const FILTERS: Array<{ label: string; value: SalesTrendFilter }> = [
   { label: '7 Days', value: '7d' },
   { label: '30 Days', value: '30d' },
   { label: 'This Month', value: 'month' },
-  { label: 'This Year', value: 'year' },
 ];
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {

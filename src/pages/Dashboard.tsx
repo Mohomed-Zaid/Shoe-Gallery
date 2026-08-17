@@ -1,418 +1,165 @@
 import {
-  AlertTriangle,
-  ArrowUpRight,
-  BadgeDollarSign,
-  BarChart3,
-  Building2,
-  CalendarClock,
-  DollarSign,
-  Package,
-  ShoppingCart,
-  TrendingUp,
-  Users,
-  Wallet,
+  AlertTriangle, ArrowUpRight, Boxes, CalendarClock, Package, RotateCcw,
+  ShoppingBag, TrendingUp, Wallet, XCircle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
-import { LoadingSpinner, Alert } from '../components/ui';
-import {
-  getDashboardCards,
-  getRevenueProfitTrend,
-  getTopSellingProducts,
-  getSalesByCategory,
-  getMonthlyRevenue,
-  getLowStockProducts,
-  getRecentSales,
-} from '../services/dashboardService';
-import { SalesTrendChart } from '../components/charts/SalesTrendChart';
-import { RevenueProfitChart } from '../components/charts/RevenueProfitChart';
-import { TopProductsChart } from '../components/charts/TopProductsChart';
-import { CategoryPieChart } from '../components/charts/CategoryPieChart';
-import { MonthlyRevenueChart } from '../components/charts/MonthlyRevenueChart';
-import { formatCurrency, formatDateTime } from '../utils/format';
-import { getSubscriptionStatus, SUBSCRIPTION_QUERY_KEY } from '../services/subscriptionService';
+import { Alert, LoadingSpinner } from '../components/ui';
 import { RegisterStatusCard } from '../components/cash-register/RegisterStatusCard';
+import { SalesTrendChart } from '../components/charts/SalesTrendChart';
+import { formatCurrency } from '../utils/format';
+import { getDashboardCards, getRecentSales } from '../services/dashboardService';
+import { getSubscriptionStatus, SUBSCRIPTION_QUERY_KEY, SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
 
-const STORE_NAME = 'Shoe Gallery';
+const TIME_ZONE = 'Asia/Colombo';
 
-function getGreetingDate() {
-  return new Date().toLocaleString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
 }
 
-// ─── Stat Card ───────────────────────────────────────────────────────────────
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-  sub?: string;
-  accent?: boolean;
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('en-US', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
-function StatCard({ label, value, icon: Icon, sub, accent }: StatCardProps) {
+function paymentLabel(value: string) {
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function MetricCard({ label, value, icon: Icon }: { label: string; value: string; icon: React.ElementType }) {
   return (
-    <div className={`glass-card p-5 ${accent ? 'border-dashboard-accent/25' : ''}`}>
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-dashboard-text-label">{label}</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-dashboard-text-primary">{value}</p>
-          {sub && <p className="mt-1 text-xs text-dashboard-text-sub">{sub}</p>}
+    <div className="glass-card min-w-0 p-4">
+      <div className="relative z-10 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-dashboard-text-label">{label}</p>
+          <p className="mt-1.5 truncate text-xl font-bold text-dashboard-text-primary xl:text-2xl">{value}</p>
         </div>
-        <div className={`glass-icon h-10 w-10 shrink-0 ${accent ? 'border-dashboard-accent/30 bg-dashboard-accent/20' : ''}`}>
-          <Icon size={18} className={accent ? 'text-dashboard-accent' : 'text-dashboard-text-label'} />
-        </div>
+        <div className="glass-icon h-9 w-9 shrink-0 text-dashboard-accent"><Icon size={17} /></div>
       </div>
     </div>
   );
 }
 
-// ─── Chart Wrapper ───────────────────────────────────────────────────────────
+function SubscriptionCard() {
+  const { profile } = useAuth();
+  const { data, isLoading, error } = useQuery({
+    queryKey: SUBSCRIPTION_QUERY_KEY,
+    queryFn: getSubscriptionStatus,
+    refetchInterval: 5 * 60 * 1000,
+  });
+  const remaining = Math.max(0, Number(data?.days_remaining ?? 0));
+  const expired = Boolean(data?.is_expired || data?.status === 'expired');
+  const warning = !expired && remaining <= 7;
+  const label = expired ? 'EXPIRED' : warning ? 'EXPIRING SOON' : 'ACTIVE';
+  const tone = expired
+    ? 'border-red-400/25 bg-red-500/10 text-red-300'
+    : warning
+      ? 'border-amber-400/25 bg-amber-500/10 text-amber-300'
+      : 'border-dashboard-accent/25 bg-dashboard-accent/10 text-dashboard-accent';
+  const canManage = profile?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
 
-function ChartCard({ title, subtitle, children, isLoading, className = '' }: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  isLoading?: boolean;
-  className?: string;
-}) {
   return (
-    <div className={`glass-card p-6 ${className}`}>
+    <div className="glass-card p-4">
       <div className="relative z-10">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-dashboard-text-primary">{title}</h3>
-            {subtitle && <p className="mt-0.5 text-xs text-dashboard-text-sub">{subtitle}</p>}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="glass-icon h-9 w-9 shrink-0 text-dashboard-accent"><CalendarClock size={17} /></div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-dashboard-text-label">System Subscription</p>
+              {isLoading ? <p className="mt-1 text-sm text-dashboard-text-sub">Loading…</p> : <span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${tone}`}>{label}</span>}
+            </div>
           </div>
+          {canManage && <Link to="/admin/subscription" className="rounded-lg px-2 py-1 text-xs font-medium text-dashboard-accent hover:bg-dashboard-accent/10">Manage</Link>}
         </div>
-        {isLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <LoadingSpinner />
+        {error ? <p className="mt-3 text-sm text-red-300">Subscription status is unavailable.</p> : data && (
+          <div className="mt-3 grid grid-cols-2 gap-3 border-t border-white/[0.07] pt-3 text-sm">
+            <div><p className="text-xs text-dashboard-text-sub">Expiry Date</p><p className="mt-0.5 font-semibold text-dashboard-text-primary">{formatDate(data.expires_at)}</p></div>
+            <div><p className="text-xs text-dashboard-text-sub">Days Remaining</p><p className={`mt-0.5 font-semibold ${expired ? 'text-red-300' : warning ? 'text-amber-300' : 'text-dashboard-text-primary'}`}>{expired ? 'Expired' : `${remaining} ${remaining === 1 ? 'Day' : 'Days'}`}</p></div>
           </div>
-        ) : (
-          children
         )}
       </div>
     </div>
   );
 }
 
-// ─── Dashboard ───────────────────────────────────────────────────────────────
-
 export function Dashboard() {
-  const { profile } = useAuth();
-  const firstName = profile?.full_name?.split(' ')[0] ?? profile?.email?.split('@')[0] ?? 'User';
-
-  const QUERY_OPTS = { staleTime: 60_000, refetchInterval: 120_000 };
-
-  const { data: subscription } = useQuery({
-    queryKey: SUBSCRIPTION_QUERY_KEY,
-    queryFn: getSubscriptionStatus,
-    refetchInterval: 5 * 60 * 1000,
-  });
-
-  const subscriptionExpiry = subscription?.expires_at
-    ? new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'long',
-        timeStyle: 'short',
-      }).format(new Date(subscription.expires_at))
-    : 'Unavailable';
-
-  const { data: cards, isLoading: cardsLoading, error: cardsError } = useQuery({
-    queryKey: ['dashboardCards'],
-    queryFn: getDashboardCards,
-    ...QUERY_OPTS,
-  });
-
-  const { data: revProfit = [], isLoading: revProfitLoading } = useQuery({
-    queryKey: ['revenueProfitTrend'],
-    queryFn: getRevenueProfitTrend,
-    ...QUERY_OPTS,
-  });
-
-  const { data: topProducts = [], isLoading: topLoading } = useQuery({
-    queryKey: ['topSellingProducts'],
-    queryFn: getTopSellingProducts,
-    ...QUERY_OPTS,
-  });
-
-  const { data: categorySales = [], isLoading: catLoading } = useQuery({
-    queryKey: ['salesByCategory'],
-    queryFn: getSalesByCategory,
-    ...QUERY_OPTS,
-  });
-
-  const { data: monthlyRevenue = [], isLoading: monthlyLoading } = useQuery({
-    queryKey: ['monthlyRevenue'],
-    queryFn: getMonthlyRevenue,
-    ...QUERY_OPTS,
-  });
-
-  const { data: lowStock = [], isLoading: lowStockLoading } = useQuery({
-    queryKey: ['lowStockProducts'],
-    queryFn: getLowStockProducts,
-    ...QUERY_OPTS,
-  });
-
-  const { data: recentSales = [], isLoading: recentSalesLoading } = useQuery({
-    queryKey: ['recentSales'],
-    queryFn: getRecentSales,
-    ...QUERY_OPTS,
-  });
+  const queryOptions = { staleTime: 60_000, refetchInterval: 120_000 };
+  const { data: cards, isLoading, error } = useQuery({ queryKey: ['dashboardCards'], queryFn: getDashboardCards, ...queryOptions });
+  const { data: recentSales = [], isLoading: recentLoading, error: recentError } = useQuery({ queryKey: ['recentSales'], queryFn: getRecentSales, ...queryOptions });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-dashboard-text-primary md:text-3xl">
-            Welcome back, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-dashboard-text-sub">~ {STORE_NAME}</p>
-          <p className="mt-1 text-xs text-dashboard-text-sub">{getGreetingDate()}</p>
-        </div>
-        <Link
-          to="/pos"
-          className="inline-flex items-center gap-2 rounded-xl border border-dashboard-accent/30 bg-dashboard-accent/10 px-4 py-2 text-sm font-medium text-dashboard-accent transition hover:bg-dashboard-accent/20"
-        >
-          <ShoppingCart size={15} />
-          New Sale
-          <ArrowUpRight size={13} />
-        </Link>
-      </div>
+    <div className="min-w-0 space-y-5">
+      <h1 className="text-xl font-bold text-dashboard-text-primary sm:text-2xl">Dashboard</h1>
 
-      <div className="glass-card border-dashboard-accent/25 p-4 md:p-5">
-        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="glass-icon h-11 w-11 shrink-0 text-dashboard-accent">
-              <CalendarClock size={20} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-dashboard-text-sub">Service subscription expiry</p>
-              <p className="mt-1 font-semibold text-dashboard-text-primary">{subscriptionExpiry}</p>
-            </div>
+      <section className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <RegisterStatusCard />
+        <SubscriptionCard />
+      </section>
+
+      {error && <Alert message="Unable to load dashboard data." />}
+      <section>
+        <h2 className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-dashboard-text-sub">Today</h2>
+        {isLoading ? <LoadingSpinner /> : (
+          <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard label="Today's Sales" value={(cards?.todaySales ?? 0).toLocaleString()} icon={ShoppingBag} />
+            <MetricCard label="Today's Revenue" value={formatCurrency(cards?.todayRevenue ?? 0)} icon={Wallet} />
+            <MetricCard label="Today's Profit" value={formatCurrency(cards?.todayProfit ?? 0)} icon={TrendingUp} />
+            <MetricCard label="Today's Returns" value={formatCurrency(cards?.todayReturns ?? 0)} icon={RotateCcw} />
           </div>
-          {subscription && (
-            <div className="sm:text-right">
-              <p className="text-sm font-semibold text-dashboard-accent">
-                {subscription.days_remaining} {subscription.days_remaining === 1 ? 'day' : 'days'} remaining
-              </p>
-              <p className="mt-0.5 text-xs capitalize text-dashboard-text-sub">Status: {subscription.status}</p>
+        )}
+      </section>
+
+      <section className="glass-card p-4">
+        <div className="relative z-10">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-dashboard-text-primary">Inventory Status</h2>
+            <Link to="/inventory" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-medium text-dashboard-accent hover:bg-dashboard-accent/10">View Inventory <ArrowUpRight size={12} /></Link>
+          </div>
+          {isLoading ? <LoadingSpinner /> : (
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.07] sm:grid-cols-3 lg:grid-cols-5">
+              {[
+                ['Total Products', (cards?.totalProducts ?? 0).toLocaleString(), Package],
+                ['Stock Units', (cards?.totalStockUnits ?? 0).toLocaleString(), Boxes],
+                ['Inventory Value', formatCurrency(cards?.inventoryValue ?? 0), Wallet],
+                ['Low Stock', (cards?.lowStockVariants ?? 0).toLocaleString(), AlertTriangle],
+                ['Out of Stock', (cards?.outOfStockVariants ?? 0).toLocaleString(), XCircle],
+              ].map(([label, value, Icon]) => (
+                <Link to="/inventory" key={String(label)} className="min-w-0 bg-[#061711] p-3 transition hover:bg-white/[0.05]">
+                  <div className="flex items-center gap-2 text-dashboard-text-sub"><Icon size={14} /><span className="truncate text-[11px] uppercase tracking-wide">{String(label)}</span></div>
+                  <p className="mt-1.5 truncate text-base font-bold text-dashboard-text-primary xl:text-lg">{String(value)}</p>
+                </Link>
+              ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      <RegisterStatusCard />
-
-      {cardsError && <Alert message="Unable to load dashboard data." />}
-
-      {/* Stat Cards */}
-      {cardsLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <>
-          {/* Row 1: Today */}
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-dashboard-text-sub">Today</p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-3">
-              <StatCard
-                label="Today's Orders"
-                value={String(cards?.todaySales ?? 0)}
-                icon={ShoppingCart}
-                accent
-              />
-              <StatCard
-                label="Today's Revenue"
-                value={formatCurrency(cards?.todayRevenue ?? 0)}
-                icon={DollarSign}
-                accent
-              />
-              <StatCard
-                label="Today's Profit"
-                value={formatCurrency(cards?.todayProfit ?? 0)}
-                icon={TrendingUp}
-                accent
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Monthly */}
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-dashboard-text-sub">This Month</p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-2 xl:grid-cols-2">
-              <StatCard
-                label="Monthly Revenue"
-                value={formatCurrency(cards?.monthlyRevenue ?? 0)}
-                icon={Wallet}
-              />
-              <StatCard
-                label="Monthly Profit"
-                value={formatCurrency(cards?.monthlyProfit ?? 0)}
-                icon={BadgeDollarSign}
-              />
-            </div>
-          </div>
-
-          {/* Row 3: Business totals */}
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-dashboard-text-sub">Overview</p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-4">
-              <StatCard label="Total Products" value={String(cards?.totalProducts ?? 0)} icon={Package} />
-              <StatCard label="Total Customers" value={String(cards?.totalCustomers ?? 0)} icon={Users} />
-              <StatCard label="Total Suppliers" value={String(cards?.totalSuppliers ?? 0)} icon={Building2} />
-              <StatCard
-                label="Inventory Value"
-                value={formatCurrency(cards?.inventoryValue ?? 0)}
-                icon={BarChart3}
-              />
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Charts Row 1: Sales Trend + Revenue vs Profit */}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard
-          title="Sales Trend"
-          subtitle="Actual sales over time from Supabase"
-          isLoading={false}
-        >
+      <section className="glass-card p-4">
+        <div className="relative z-10">
+          <div className="mb-3"><h2 className="text-sm font-semibold uppercase tracking-wide text-dashboard-text-primary">Sales Trend</h2><p className="mt-0.5 text-xs text-dashboard-text-sub">Net completed-sales revenue</p></div>
           <SalesTrendChart />
-        </ChartCard>
-
-        <ChartCard
-          title="Revenue vs Profit"
-          subtitle="Last 30 days — from actual sale items & cost prices"
-          isLoading={revProfitLoading}
-        >
-          <RevenueProfitChart data={revProfit} />
-        </ChartCard>
-      </div>
-
-      {/* Charts Row 2: Monthly Revenue + Category Pie */}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard
-          title="Monthly Revenue"
-          subtitle={`Full year ${new Date().getFullYear()}`}
-          isLoading={monthlyLoading}
-        >
-          <MonthlyRevenueChart data={monthlyRevenue} />
-        </ChartCard>
-
-        <ChartCard
-          title="Sales by Category"
-          subtitle="Units sold per product category"
-          isLoading={catLoading}
-        >
-          <CategoryPieChart data={categorySales} />
-        </ChartCard>
-      </div>
-
-      {/* Charts Row 3: Top Products (full width) */}
-      <ChartCard
-        title="Top 10 Selling Products"
-        subtitle="By total quantity sold across all time"
-        isLoading={topLoading}
-      >
-        <TopProductsChart data={topProducts} />
-      </ChartCard>
-
-      {/* Tables Row: Recent Sales + Low Stock */}
-      <div className="grid gap-6 xl:grid-cols-2">
-        {/* Recent Sales */}
-        <div className="glass-card p-6">
-          <div className="relative z-10">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-dashboard-text-primary">Recent Sales</h3>
-              <Link to="/sales" className="flex items-center gap-1 text-xs text-dashboard-accent hover:text-dashboard-accent-light">
-                View all <ArrowUpRight size={12} />
-              </Link>
-            </div>
-
-            {recentSalesLoading ? (
-              <LoadingSpinner />
-            ) : recentSales.length === 0 ? (
-              <p className="text-sm text-dashboard-text-sub">No sales yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentSales.map((sale) => (
-                  <Link key={sale.id} to={`/sales/${sale.id}`} className="block">
-                    <div className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3 transition hover:bg-white/[0.06]">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-dashboard-text-primary">
-                          {sale.invoice_number ?? sale.id.slice(0, 8)}
-                        </p>
-                        <p className="text-xs text-dashboard-text-sub">
-                          {sale.customer} • {sale.cashier}
-                        </p>
-                      </div>
-                      <div className="ml-4 text-right shrink-0">
-                        <p className="text-sm font-semibold text-dashboard-accent">{formatCurrency(sale.amount)}</p>
-                        <p className="text-xs text-dashboard-text-sub">{formatDateTime(sale.created_at)}</p>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
+      </section>
 
-        {/* Low Stock */}
-        <div className="glass-card p-6">
-          <div className="relative z-10">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-dashboard-text-primary">
-                <AlertTriangle size={15} className="mr-2 inline-block text-amber-400" />
-                Low Stock Alert
-              </h3>
-              <Link to="/inventory" className="flex items-center gap-1 text-xs text-dashboard-accent hover:text-dashboard-accent-light">
-                View all <ArrowUpRight size={12} />
-              </Link>
-            </div>
-
-            {lowStockLoading ? (
-              <LoadingSpinner />
-            ) : lowStock.length === 0 ? (
-              <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-4 text-sm text-dashboard-text-sub">
-                <AlertTriangle size={16} className="text-green-400" />
-                All products are sufficiently stocked.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {lowStock.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between rounded-xl border border-amber-500/10 bg-amber-500/[0.04] px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-dashboard-text-primary">{item.productName}</p>
-                      <p className="text-xs text-dashboard-text-sub">{item.size} / {item.color}</p>
-                    </div>
-                    <div className="ml-4 shrink-0 text-right">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        item.stock === 0
-                          ? 'bg-red-500/20 text-red-300'
-                          : 'bg-amber-500/15 text-amber-300'
-                      }`}>
-                        {item.stock === 0 ? 'Out of stock' : `${item.stock} left`}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+      <section className="glass-card min-w-0 p-4">
+        <div className="relative z-10">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-dashboard-text-primary">Recent Sales</h2>
+            <Link to="/sales" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-medium text-dashboard-accent hover:bg-dashboard-accent/10">View All Sales <ArrowUpRight size={12} /></Link>
           </div>
+          {recentError ? <p className="text-sm text-red-300">Unable to load recent sales.</p> : recentLoading ? <LoadingSpinner /> : recentSales.length === 0 ? <p className="py-4 text-sm text-dashboard-text-sub">No completed sales yet.</p> : (
+            <>
+              <div className="hidden min-w-0 md:block">
+                <div className="grid grid-cols-[1.15fr_.7fr_1.15fr_.55fr_.75fr_.9fr] gap-3 border-b border-white/[0.08] px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-dashboard-text-sub">
+                  <span>Invoice</span><span>Time</span><span>Customer</span><span>Items</span><span>Payment</span><span className="text-right">Total</span>
+                </div>
+                {recentSales.map((sale) => <Link key={sale.id} to={`/sales/${sale.id}`} className="grid min-w-0 grid-cols-[1.15fr_.7fr_1.15fr_.55fr_.75fr_.9fr] gap-3 border-b border-white/[0.06] px-3 py-3 text-xs transition last:border-0 hover:bg-white/[0.04] xl:text-sm"><span className="truncate font-semibold text-dashboard-text-primary">{sale.invoice_number ?? sale.id.slice(0, 8)}</span><span className="truncate text-dashboard-text-label">{formatTime(sale.created_at)}</span><span className="truncate text-dashboard-text-label">{sale.customer}</span><span className="text-dashboard-text-label">{sale.itemCount}</span><span className="truncate text-dashboard-text-label">{paymentLabel(sale.paymentMethod)}</span><span className="truncate text-right font-semibold text-dashboard-accent">{formatCurrency(sale.amount)}</span></Link>)}
+              </div>
+              <div className="space-y-2 md:hidden">{recentSales.map((sale) => <Link key={sale.id} to={`/sales/${sale.id}`} className="block rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-dashboard-text-primary">{sale.invoice_number ?? sale.id.slice(0, 8)}</p><p className="mt-1 truncate text-xs text-dashboard-text-sub">{formatTime(sale.created_at)} · {sale.customer}</p><p className="mt-1 text-xs text-dashboard-text-sub">{sale.itemCount} {sale.itemCount === 1 ? 'Item' : 'Items'} · {paymentLabel(sale.paymentMethod)}</p></div><p className="shrink-0 text-sm font-semibold text-dashboard-accent">{formatCurrency(sale.amount)}</p></div></Link>)}</div>
+            </>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

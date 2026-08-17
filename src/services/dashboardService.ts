@@ -1,375 +1,131 @@
 import { supabase } from './supabase';
-import { calculateProfitTotals, type ProfitReturnItem, type ProfitSaleItem } from '../utils/profitCalculation';
 
-
-// ─── Types ─────────────────────────────────────────────────────────────────
-
-export type SalesTrendFilter = 'today' | '7d' | '30d' | 'month' | 'year';
+export type SalesTrendFilter = 'today' | '7d' | '30d' | 'month';
 
 export interface DashboardCards {
   todaySales: number;
   todayRevenue: number;
   todayProfit: number;
-  monthlyRevenue: number;
-  monthlyProfit: number;
+  todayReturns: number;
   totalProducts: number;
-  totalCustomers: number;
-  totalSuppliers: number;
+  totalStockUnits: number;
   inventoryValue: number;
+  lowStockVariants: number;
+  outOfStockVariants: number;
 }
 
-export interface TrendPoint {
-  label: string;
-  value: number;
-}
-
-export interface RevenueProfitPoint {
-  label: string;
-  revenue: number;
-  profit: number;
-}
-
-export interface TopProduct {
-  name: string;
-  quantity: number;
-}
-
-export interface CategorySales {
-  name: string;
-  value: number;
-}
-
-export interface MonthlyRevenuePt {
-  month: string;
-  revenue: number;
-}
-
-export interface LowStockItem {
-  id: string;
-  productName: string;
-  size: string;
-  color: string;
-  stock: number;
-  limit: number;
-}
+export interface TrendPoint { label: string; value: number; }
+export interface RevenueProfitPoint { label: string; revenue: number; profit: number; }
+export interface TopProduct { name: string; quantity: number; }
+export interface CategorySales { name: string; value: number; }
+export interface MonthlyRevenuePt { month: string; revenue: number; }
 
 export interface RecentSale {
   id: string;
   invoice_number: string | null;
   customer: string;
-  cashier: string;
+  itemCount: number;
+  paymentMethod: string;
   amount: number;
   created_at: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const BUSINESS_TIME_ZONE = 'Asia/Colombo';
 
-function startOfDay(d: Date) {
-  const c = new Date(d);
-  c.setHours(0, 0, 0, 0);
-  return c;
-}
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+function businessDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
-// ─── Dashboard Cards ────────────────────────────────────────────────────────
+function addDays(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 
 export async function getDashboardCards(): Promise<DashboardCards> {
-  const now = new Date();
-  const today = now.toLocaleDateString('en-CA');
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('en-CA');
-  const [todayResult, monthResult, products, customers, suppliers, inventory] = await Promise.all([
+  const today = businessDate();
+  const [businessResult, returnsResult, inventoryResult] = await Promise.all([
     supabase.rpc('get_profit_dashboard_summary', { p_start_date: today, p_end_date: today }),
-    supabase.rpc('get_profit_dashboard_summary', { p_start_date: monthStart, p_end_date: today }),
-    supabase.from('products').select('id', { count: 'exact', head: true }),
-    supabase.from('customers').select('id', { count: 'exact', head: true }),
-    supabase.from('suppliers').select('id', { count: 'exact', head: true }),
-    supabase.from('product_variants').select('cost_price, stock_quantity'),
+    supabase.rpc('get_returns_report', {
+      p_start_date: today, p_end_date: today, p_search: null, p_return_type: null,
+      p_status: 'completed', p_customer_id: null, p_processor_id: null,
+      p_restock_status: null, p_page: 1, p_page_size: 25, p_sort: 'newest',
+    }),
+    supabase.rpc('get_inventory_report', {
+      p_search: null, p_category_id: null, p_brand_id: null, p_stock_status: null,
+      p_page: 1, p_page_size: 25, p_sort: 'product_asc',
+    }),
   ]);
-  if (todayResult.error) throw todayResult.error;
-  if (monthResult.error) throw monthResult.error;
-  const todayTotals = (todayResult.data ?? {}) as { revenue?: number; profit?: number; sales?: number };
-  const monthTotals = (monthResult.data ?? {}) as { revenue?: number; profit?: number };
-  const inventoryValue = (inventory.data ?? []).reduce((sum, variant) => sum + Number(variant.cost_price) * Number(variant.stock_quantity), 0);
-  return { todaySales: Number(todayTotals.sales ?? 0), todayRevenue: Number(todayTotals.revenue ?? 0), todayProfit: Number(todayTotals.profit ?? 0), monthlyRevenue: Number(monthTotals.revenue ?? 0), monthlyProfit: Number(monthTotals.profit ?? 0), totalProducts: products.count ?? 0, totalCustomers: customers.count ?? 0, totalSuppliers: suppliers.count ?? 0, inventoryValue };
-}
+  if (businessResult.error) throw businessResult.error;
+  if (returnsResult.error) throw returnsResult.error;
+  if (inventoryResult.error) throw inventoryResult.error;
 
-// ─── Sales Trend ─────────────────────────────────────────────────────────────
+  const business = (businessResult.data ?? {}) as { revenue?: number; profit?: number; sales?: number };
+  const returns = (returnsResult.data ?? {}) as { summary?: { return_value?: number } };
+  const inventory = (inventoryResult.data ?? {}) as { summary?: Record<string, number> };
+  const summary = inventory.summary ?? {};
+
+  return {
+    todaySales: Number(business.sales ?? 0),
+    todayRevenue: Number(business.revenue ?? 0),
+    todayProfit: Number(business.profit ?? 0),
+    todayReturns: Number(returns.summary?.return_value ?? 0),
+    totalProducts: Number(summary.total_products ?? 0),
+    totalStockUnits: Number(summary.total_stock ?? 0),
+    inventoryValue: Number(summary.cost_value ?? 0),
+    lowStockVariants: Number(summary.low_stock_variants ?? 0),
+    outOfStockVariants: Number(summary.out_of_stock_variants ?? 0),
+  };
+}
 
 export async function getSalesTrend(filter: SalesTrendFilter): Promise<TrendPoint[]> {
-  const now = new Date();
-  let fromDate: Date;
+  const endDate = businessDate();
+  const startDate = filter === 'today' ? endDate
+    : filter === '7d' ? addDays(endDate, -6)
+    : filter === '30d' ? addDays(endDate, -29)
+    : `${endDate.slice(0, 8)}01`;
+  const { data, error } = await supabase.rpc('get_profit_report', {
+    p_filters: { startDate, endDate }, p_page: 1, p_page_size: 25, p_sort: 'newest',
+  });
+  if (error) throw error;
 
-  if (filter === 'today') {
-    fromDate = startOfDay(now);
-  } else if (filter === '7d') {
-    fromDate = new Date(now);
-    fromDate.setDate(now.getDate() - 6);
-    fromDate = startOfDay(fromDate);
-  } else if (filter === '30d') {
-    fromDate = new Date(now);
-    fromDate.setDate(now.getDate() - 29);
-    fromDate = startOfDay(fromDate);
-  } else if (filter === 'month') {
-    fromDate = startOfMonth(now);
-  } else {
-    // year
-    fromDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-  }
-
-  const { data } = await supabase
-    .from('sales')
-    .select('created_at, total_amount')
-    .in('status', ['completed', 'partially_returned', 'fully_returned'])
-    .gte('created_at', fromDate.toISOString())
-    .order('created_at', { ascending: true });
-
-  const sales = (data ?? []) as Array<{ created_at: string; total_amount: number }>;
-
-  if (filter === 'today') {
-    // Group by hour 0–23
-    const map = new Map<number, number>();
-    for (let h = 0; h <= now.getHours(); h++) map.set(h, 0);
-    for (const s of sales) {
-      const h = new Date(s.created_at).getHours();
-      map.set(h, (map.get(h) ?? 0) + Number(s.total_amount));
-    }
-    return Array.from(map.entries()).map(([h, v]) => ({
-      label: `${String(h).padStart(2, '0')}:00`,
-      value: v,
-    }));
-  } else if (filter === 'year') {
-    const map = new Map<string, number>();
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    for (let m = 0; m <= now.getMonth(); m++) map.set(months[m], 0);
-    for (const s of sales) {
-      const key = months[new Date(s.created_at).getMonth()];
-      map.set(key, (map.get(key) ?? 0) + Number(s.total_amount));
-    }
-    return Array.from(map.entries()).map(([label, value]) => ({ label, value }));
-  } else {
-    // Group by date
-    const map = new Map<string, number>();
-    const days = filter === '7d' ? 7 : 30;
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const key = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-      map.set(key, 0);
-    }
-    for (const s of sales) {
-      const key = new Date(s.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-      if (map.has(key)) map.set(key, (map.get(key) ?? 0) + Number(s.total_amount));
-    }
-    return Array.from(map.entries()).map(([label, value]) => ({ label, value }));
-  }
+  const daily = ((data ?? {}) as { daily?: Array<{ date: string; revenue: number }> }).daily ?? [];
+  const values = new Map(daily.map((point) => [point.date, Number(point.revenue ?? 0)]));
+  const count = Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000) + 1;
+  return Array.from({ length: count }, (_, index) => {
+    const date = addDays(startDate, index);
+    const label = new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit', month: 'short', timeZone: 'UTC',
+    }).format(new Date(`${date}T00:00:00Z`));
+    return { label, value: values.get(date) ?? 0 };
+  });
 }
-
-// ─── Revenue vs Profit Trend ─────────────────────────────────────────────────
-
-export async function getRevenueProfitTrend(): Promise<RevenueProfitPoint[]> {
-  const now = new Date();
-  const from = new Date(now);
-  from.setDate(now.getDate() - 29);
-  from.setHours(0, 0, 0, 0);
-
-  const { data: salesData } = await supabase
-    .from('sales')
-    .select('id, created_at, total_amount')
-    .in('status', ['completed', 'partially_returned', 'fully_returned'])
-    .gte('created_at', from.toISOString())
-    .order('created_at', { ascending: true });
-
-  const sales = (salesData ?? []) as Array<{ id: string; created_at: string; total_amount: number }>;
-
-  const saleIds = sales.map((sale) => sale.id);
-  const [itemsResult, returnsResult] = saleIds.length ? await Promise.all([
-    supabase.from('sale_items')
-      .select('sale_id, quantity, cost_price_at_sale, cost_price')
-      .in('sale_id', saleIds),
-    supabase.from('sales_return_items')
-      .select('quantity_returned, return_total, cost_price_at_sale, return:sales_returns!inner(sale_id, status)')
-      .in('return.sale_id', saleIds)
-      .eq('return.status', 'completed'),
-  ]) : [{ data: [] }, { data: [] }];
-  const items = (itemsResult.data ?? []) as unknown as ProfitSaleItem[];
-  type TrendReturnRow = Omit<ProfitReturnItem, 'sale_id'> & { return: { sale_id: string } | null };
-  const returnedItems = ((returnsResult.data ?? []) as unknown as TrendReturnRow[])
-    .filter((item) => item.return?.sale_id)
-    .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
-  const saleItems = new Map<string, ProfitSaleItem[]>();
-  const saleReturns = new Map<string, ProfitReturnItem[]>();
-  for (const item of items) saleItems.set(item.sale_id, [...(saleItems.get(item.sale_id) ?? []), item]);
-  for (const item of returnedItems) saleReturns.set(item.sale_id, [...(saleReturns.get(item.sale_id) ?? []), item]);
-
-  const map = new Map<string, { revenue: number; profit: number }>();
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    const key = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-    map.set(key, { revenue: 0, profit: 0 });
-  }
-
-  for (const s of sales) {
-    const key = new Date(s.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-    if (map.has(key)) {
-      const prev = map.get(key)!;
-      const totals = calculateProfitTotals([s], saleItems.get(s.id) ?? [], saleReturns.get(s.id) ?? []);
-      map.set(key, { revenue: prev.revenue + totals.revenue, profit: prev.profit + totals.profit });
-    }
-  }
-
-  return Array.from(map.entries()).map(([label, v]) => ({ label, ...v }));
-}
-
-// ─── Top Selling Products ────────────────────────────────────────────────────
-
-export async function getTopSellingProducts(): Promise<TopProduct[]> {
-  const { data } = await supabase
-    .from('sale_items')
-    .select('quantity, product_name_snapshot, variant:product_variants(product:products(name))');
-
-  type ItemRow = {
-    quantity: number;
-    product_name_snapshot: string | null;
-    variant: { product: { name: string } | null } | null;
-  };
-
-  const items = (data ?? []) as unknown as ItemRow[];
-  const map = new Map<string, number>();
-
-  for (const item of items) {
-    const name = item.product_name_snapshot?.replace(' (Instant Sale)', '') ??
-      item.variant?.product?.name ?? 'Unknown';
-    map.set(name, (map.get(name) ?? 0) + item.quantity);
-  }
-
-  return Array.from(map.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([name, quantity]) => ({ name, quantity }));
-}
-
-// ─── Sales by Category ───────────────────────────────────────────────────────
-
-export async function getSalesByCategory(): Promise<CategorySales[]> {
-  const { data } = await supabase
-    .from('sale_items')
-    .select('quantity, is_instant_sale, variant:product_variants(product:products(category:categories(name)))');
-
-  type ItemRow = {
-    quantity: number;
-    is_instant_sale: boolean | null;
-    variant: { product: { category: { name: string } | null } | null } | null;
-  };
-
-  const items = (data ?? []) as unknown as ItemRow[];
-  const map = new Map<string, number>();
-
-  for (const item of items) {
-    const name = item.is_instant_sale
-      ? 'Instant Sale'
-      : item.variant?.product?.category?.name ?? 'Uncategorized';
-    map.set(name, (map.get(name) ?? 0) + item.quantity);
-  }
-
-  return Array.from(map.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => ({ name, value }));
-}
-
-// ─── Monthly Revenue (current year) ─────────────────────────────────────────
-
-export async function getMonthlyRevenue(): Promise<MonthlyRevenuePt[]> {
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1).toISOString();
-
-  const { data } = await supabase
-    .from('sales')
-    .select('created_at, total_amount')
-    .eq('status', 'completed')
-    .gte('created_at', yearStart);
-
-  const sales = (data ?? []) as Array<{ created_at: string; total_amount: number }>;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const map = new Map<string, number>(months.map((m) => [m, 0]));
-
-  for (const s of sales) {
-    const key = months[new Date(s.created_at).getMonth()];
-    map.set(key, (map.get(key) ?? 0) + Number(s.total_amount));
-  }
-
-  return months.map((month) => ({ month, revenue: map.get(month) ?? 0 }));
-}
-
-// ─── Low Stock Products ──────────────────────────────────────────────────────
-
-export async function getLowStockProducts(): Promise<LowStockItem[]> {
-  const { data: settingsData } = await supabase
-    .from('store_settings')
-    .select('default_low_stock_limit')
-    .maybeSingle();
-
-  const limit = Number((settingsData as { default_low_stock_limit: number } | null)?.default_low_stock_limit ?? 10);
-
-  const { data } = await supabase
-    .from('product_variants')
-    .select('id, size, color, stock_quantity, product:products(name)')
-    .lt('stock_quantity', limit)
-    .order('stock_quantity', { ascending: true })
-    .limit(20);
-
-  type VariantRow = {
-    id: string;
-    size: string;
-    color: string;
-    stock_quantity: number;
-    product: { name: string } | null;
-  };
-
-  return ((data ?? []) as unknown as VariantRow[]).map((v) => ({
-    id: v.id,
-    productName: v.product?.name ?? 'Unknown',
-    size: v.size,
-    color: v.color,
-    stock: v.stock_quantity,
-    limit,
-  }));
-}
-
-// ─── Recent Sales ─────────────────────────────────────────────────────────────
 
 export async function getRecentSales(): Promise<RecentSale[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('sales')
-    .select(`
-      id,
-      invoice_number,
-      total_amount,
-      created_at,
-      customer:customers(name),
-      cashier:profiles(full_name, email)
-    `)
-    .eq('status', 'completed')
+    .select('id,invoice_number,total_amount,created_at,payment_method,customer:customers(name),sale_items(id)')
+    .in('status', ['completed', 'partially_returned', 'fully_returned'])
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(5);
+  if (error) throw error;
 
   type SaleRow = {
-    id: string;
-    invoice_number: string | null;
-    total_amount: number;
-    created_at: string;
-    customer: { name: string } | null;
-    cashier: { full_name: string | null; email: string | null } | null;
+    id: string; invoice_number: string | null; total_amount: number; created_at: string;
+    payment_method: string; customer: { name: string } | null; sale_items: Array<{ id: string }> | null;
   };
-
-  return ((data ?? []) as unknown as SaleRow[]).map((s) => ({
-    id: s.id,
-    invoice_number: s.invoice_number,
-    customer: s.customer?.name ?? 'Walk-in Customer',
-    cashier: s.cashier?.full_name ?? s.cashier?.email ?? 'Cashier',
-    amount: Number(s.total_amount),
-    created_at: s.created_at,
+  return ((data ?? []) as unknown as SaleRow[]).map((sale) => ({
+    id: sale.id,
+    invoice_number: sale.invoice_number,
+    customer: sale.customer?.name ?? 'Walk-in Customer',
+    itemCount: sale.sale_items?.length ?? 0,
+    paymentMethod: sale.payment_method,
+    amount: Number(sale.total_amount),
+    created_at: sale.created_at,
   }));
 }
