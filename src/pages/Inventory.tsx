@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Eye, FileSpreadsheet, PackageOpen, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, PackageOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as inventoryService from '../services/inventoryService';
-import * as productService from '../services/productService';
 import type { InventoryProductSummary } from '../services/inventoryService';
 import type { InventoryPriceRange } from '../services/inventoryService';
 import { getErrorMessage } from '../utils/errors';
@@ -10,15 +9,19 @@ import { formatCurrency } from '../utils/format';
 import { Alert, Button, DataTable, Input, LoadingSpinner, PageHeader } from '../components/ui';
 
 function stockStatus(stock: number) {
-  if (stock <= 0) return { label: 'Out of Stock', className: 'bg-red-500/20 text-red-300' };
-  if (stock < 10) return { label: 'Low Stock', className: 'bg-yellow-500/20 text-yellow-300' };
+  if (stock <= 0) return { label: 'Out', className: 'bg-red-500/20 text-red-300' };
+  if (stock < 10) return { label: 'Low', className: 'bg-yellow-500/20 text-yellow-300' };
   return { label: 'In Stock', className: 'bg-green-500/20 text-green-300' };
+}
+
+function formatCompactPrice(value: number) {
+  return formatCurrency(value).replace('LKR', '').trim();
 }
 
 function formatPriceRange(range: InventoryPriceRange | null) {
   if (!range) return '-';
-  if (range.min === range.max) return formatCurrency(range.min);
-  return `${formatCurrency(range.min)} - ${formatCurrency(range.max)}`;
+  if (range.min === range.max) return formatCompactPrice(range.min);
+  return `${formatCompactPrice(range.min)} - ${formatCompactPrice(range.max)}`;
 }
 
 export function Inventory() {
@@ -51,18 +54,8 @@ export function Inventory() {
     );
   }, [products, search]);
 
-  const handleDelete = async (product: InventoryProductSummary) => {
-    if (!confirm(`Delete ${product.name}? This also removes its variants and inventory matrix.`)) return;
-    const result = await productService.deleteProduct(product.id);
-    if (result.error) {
-      setError(getErrorMessage(result.error));
-      return;
-    }
-    void fetchInventory();
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="inventory-page min-w-0 max-w-full space-y-6 overflow-x-hidden">
       <PageHeader
         title="Inventory"
         description="One summary row per product. Open a product to manage its size × colour stock matrix."
@@ -95,18 +88,18 @@ export function Inventory() {
         <LoadingSpinner />
       ) : (
         <DataTable
+          className="inventory-table-wrapper"
+          tableClassName="inventory-table"
+          fitToWidth
           columns={[
-            { key: 'code', header: 'Code' },
-            { key: 'product', header: 'Product' },
-            { key: 'article', header: 'Article' },
-            { key: 'category', header: 'Category' },
-            { key: 'brand', header: 'Brand' },
-            { key: 'cost', header: 'Cost Price' },
-            { key: 'price', header: 'Selling Price' },
-            { key: 'stock', header: 'Total Stock' },
-            { key: 'value', header: 'Stock Value' },
-            { key: 'status', header: 'Status' },
-            { key: 'actions', header: 'Actions', className: 'text-right' },
+            { key: 'product', header: 'Product', className: 'w-[28%]' },
+            { key: 'article', header: 'Article', className: 'w-[10%]' },
+            { key: 'variants', header: 'Variants', className: 'w-[9%] text-center' },
+            { key: 'stock', header: 'Stock', className: 'w-[9%] text-center' },
+            { key: 'cost', header: 'Cost', className: 'w-[13%] text-right' },
+            { key: 'price', header: 'Selling Price', className: 'w-[15%] text-right' },
+            { key: 'status', header: 'Status', className: 'w-[10%] text-center' },
+            { key: 'actions', header: 'Action', className: 'w-[6%] text-center' },
           ]}
           isEmpty={filteredProducts.length === 0}
           emptyMessage={search ? 'No products match your search' : 'No products found'}
@@ -119,38 +112,32 @@ export function Inventory() {
                 className="cursor-pointer hover:bg-dashboard-hover"
                 onClick={() => navigate(`/inventory/${product.id}`)}
               >
-                <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">
-                  {product.code}
+                <td className="min-w-0 overflow-hidden px-2 py-2.5">
+                  <p className="truncate text-sm font-medium text-dashboard-text-primary" title={product.name}>{product.name}</p>
+                  {(product.category?.name || product.brand?.name) && (
+                    <p className="mt-0.5 truncate text-xs text-dashboard-text-sub" title={[product.category?.name, product.brand?.name].filter(Boolean).join(' · ')}>
+                      {[product.category?.name, product.brand?.name].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                 </td>
-                <td className="min-w-48 px-4 py-4 xl:px-6">
-                  <p className="text-sm font-medium text-dashboard-text-primary">{product.name}</p>
-                  <p className="max-w-56 truncate text-xs text-dashboard-text-sub">{product.description || '—'}</p>
+                <td className="min-w-0 truncate px-2 py-2.5 text-sm text-dashboard-text-sub" title={product.item_article || '*'}>
+                  {product.item_article || '*'}
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">
-                  {product.item_article || product.item_number || '-'}
+                <td className="min-w-0 px-2 py-2.5 text-center text-sm text-dashboard-text-sub">{product.product_variants.length}</td>
+                <td className="min-w-0 px-2 py-2.5 text-center text-sm font-semibold text-dashboard-text-primary">{product.total_stock}</td>
+                <td className="min-w-0 truncate px-2 py-2.5 text-right text-sm tabular-nums text-dashboard-text-sub" title={formatPriceRange(product.cost_price_range)}>
+                  {formatPriceRange(product.cost_price_range)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.category?.name || '—'}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{product.brand?.name || '—'}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-sub xl:px-6">{formatPriceRange(product.cost_price_range)}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-dashboard-text-primary xl:px-6">{formatPriceRange(product.selling_price_range)}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-dashboard-text-primary xl:px-6">{product.total_stock}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-dashboard-text-primary xl:px-6">{formatCurrency(product.stock_value)}</td>
-                <td className="whitespace-nowrap px-4 py-4 xl:px-6">
-                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>{status.label}</span>
+                <td className="min-w-0 truncate px-2 py-2.5 text-right text-sm font-medium tabular-nums text-dashboard-text-primary" title={formatPriceRange(product.selling_price_range)}>
+                  {formatPriceRange(product.selling_price_range)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 text-right xl:px-6" onClick={(event) => event.stopPropagation()}>
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" title="Open Inventory Matrix" onClick={() => navigate(`/inventory/${product.id}`)}>
-                      <FileSpreadsheet size={17} />
-                      <span className="hidden 2xl:inline">Open Matrix</span>
-                    </Button>
-                    <Button size="sm" variant="ghost" title="View Product Details" onClick={() => navigate(`/products/${product.id}`)}>
-                      <Eye size={17} />
-                    </Button>
-                    <Button size="sm" variant="ghost" title="Delete Product" className="text-red-400 hover:text-red-300" onClick={() => void handleDelete(product)}>
-                      <Trash2 size={17} />
-                    </Button>
-                  </div>
+                <td className="min-w-0 px-1.5 py-2.5 text-center">
+                  <span className={`inline-flex max-w-full truncate rounded-full px-2 py-1 text-[11px] font-medium ${status.className}`}>{status.label}</span>
+                </td>
+                <td className="min-w-0 px-1 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
+                  <Button size="sm" variant="ghost" title="Open Inventory Matrix" aria-label={`Open ${product.name} inventory matrix`} className="h-8 w-8 max-w-full p-0" onClick={() => navigate(`/inventory/${product.id}`)}>
+                    <FileSpreadsheet size={16} />
+                  </Button>
                 </td>
               </tr>
             );

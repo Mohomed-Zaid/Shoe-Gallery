@@ -619,6 +619,56 @@
 }
 
 /* ─── Report print-only area (hidden on screen) ─── */
+/* Main Inventory summary is fixed to the available page width. The detailed
+   size x colour matrix keeps its own controlled scrolling surface. */
+.inventory-page {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.inventory-table-wrapper {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.inventory-table {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.inventory-table th,
+.inventory-table td {
+  min-width: 0;
+  overflow: hidden;
+  padding: .625rem .5rem;
+}
+
+.inventory-table th {
+  text-overflow: ellipsis;
+}
+
+@media screen and (max-width: 1450px) {
+  .inventory-table {
+    font-size: .8125rem;
+  }
+
+  .inventory-table th {
+    padding: .5625rem .375rem;
+    font-size: .75rem;
+    letter-spacing: .035em;
+  }
+
+  .inventory-table td {
+    padding: .5625rem .375rem;
+  }
+}
+
 .report-print-area {
   display: none;
 }
