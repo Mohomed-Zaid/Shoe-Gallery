@@ -33,8 +33,8 @@
     padding: .7rem 1rem !important;
   }
 
-  .glass-sidebar {
-    width: 14rem !important;
+  .glass-sidebar[data-collapsed="true"] {
+    width: 4.5rem !important;
   }
 
   .glass-card {
@@ -330,6 +330,19 @@
     background-color: rgba(1, 13, 10, 0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+  }
+
+  .dashboard-page {
+    transition: width .2s ease, flex-basis .2s ease;
+  }
+
+  .reports-flyout {
+    animation: reports-flyout-in .15s ease-out;
+  }
+
+  @keyframes reports-flyout-in {
+    from { opacity: 0; transform: translateX(-.35rem); }
+    to { opacity: 1; transform: translateX(0); }
   }
 
   /* ── Glass header ── */
