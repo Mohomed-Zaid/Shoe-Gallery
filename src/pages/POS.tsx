@@ -106,6 +106,7 @@ export function POS() {
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
   const [activeHeldSaleId, setActiveHeldSaleId] = useState<string | null>(null);
   const [showInstantBillingModal, setShowInstantBillingModal] = useState(false);
+  const [isCustomerDisplayConnected, setIsCustomerDisplayConnected] = useState(false);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CustomerFormValues>();
   const instantBillingForm = useForm<InstantBillingFormValues>({
     defaultValues: { cost_price: 0, quantity: 1, discount: 0 }
@@ -119,6 +120,7 @@ export function POS() {
   const customerDisplayChannelRef = useRef<BroadcastChannel | null>(null);
   const customerDisplayWindowRef = useRef<Window | null>(null);
   const latestCustomerDisplaySnapshotRef = useRef<CustomerDisplaySnapshot | null>(null);
+  const customerDisplayLastSeenRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -199,8 +201,8 @@ export function POS() {
     storeAddress: storeSettings?.address ?? null,
     customerName: selectedCustomer?.name ?? null,
     items: cart.map((item) => ({
-      id: item.variant_id,
       productName: item.product_name,
+      article: item.item_number ?? null,
       size: item.size,
       colour: item.color,
       quantity: item.quantity,
@@ -214,7 +216,7 @@ export function POS() {
     paymentFee: cardPaymentFee,
     grandTotal,
     paymentMethod,
-    amountReceived,
+    amountReceived: paymentMethod === 'cash' ? amountReceived : grandTotal,
     changeDue,
   }), [
     amountReceived,
@@ -241,8 +243,12 @@ export function POS() {
   }, []);
 
   useEffect(() => {
-    const respondToRequest = (message: CustomerDisplayMessage) => {
-      if (message.type === 'STATE_REQUEST' && latestCustomerDisplaySnapshotRef.current) {
+    const respondToCustomerDisplay = (message: CustomerDisplayMessage) => {
+      if (message.type === 'CUSTOMER_DISPLAY_READY' || message.type === 'CUSTOMER_DISPLAY_HEARTBEAT') {
+        customerDisplayLastSeenRef.current = Date.now();
+        setIsCustomerDisplayConnected(true);
+      }
+      if (message.type === 'CUSTOMER_DISPLAY_READY' && latestCustomerDisplaySnapshotRef.current) {
         broadcastCustomerDisplay({ type: 'STATE_UPDATE', payload: latestCustomerDisplaySnapshotRef.current });
       }
     };
@@ -250,7 +256,7 @@ export function POS() {
     if (typeof BroadcastChannel !== 'undefined') {
       const channel = new BroadcastChannel(CUSTOMER_DISPLAY_CHANNEL);
       customerDisplayChannelRef.current = channel;
-      channel.onmessage = (event: MessageEvent<CustomerDisplayMessage>) => respondToRequest(event.data);
+      channel.onmessage = (event: MessageEvent<CustomerDisplayMessage>) => respondToCustomerDisplay(event.data);
       return () => {
         channel.close();
         customerDisplayChannelRef.current = null;
@@ -260,11 +266,18 @@ export function POS() {
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== CUSTOMER_DISPLAY_STORAGE_KEY) return;
       const message = readCustomerDisplayFallback(event.newValue);
-      if (message) respondToRequest(message);
+      if (message) respondToCustomerDisplay(message);
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, [broadcastCustomerDisplay]);
+
+  useEffect(() => {
+    const connectionTimer = window.setInterval(() => {
+      setIsCustomerDisplayConnected(Date.now() - customerDisplayLastSeenRef.current < 7000);
+    }, 2000);
+    return () => window.clearInterval(connectionTimer);
+  }, []);
 
   useEffect(() => {
     broadcastCustomerDisplay({ type: 'STATE_UPDATE', payload: customerDisplaySnapshot });
@@ -649,7 +662,7 @@ export function POS() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="pos-page flex min-h-0 flex-col gap-4 overflow-hidden">
+    <div className="pos-page flex w-full min-w-0 max-w-full flex-col gap-4 overflow-hidden">
       <PageHeader
         title="Point of Sale"
         description="Scan, select, and complete the sale."
@@ -659,6 +672,10 @@ export function POS() {
               <Monitor size={16} />
               Customer Display
             </Button>
+            <span className={'flex items-center gap-1.5 self-center px-1 text-[11px] text-dashboard-text-sub'}>
+              <span className={isCustomerDisplayConnected ? 'h-1.5 w-1.5 rounded-full bg-emerald-400' : 'h-1.5 w-1.5 rounded-full bg-slate-500'} />
+              {isCustomerDisplayConnected ? 'Display connected' : 'Display not connected'}
+            </span>
             <Button variant="secondary" onClick={() => setShowInstantBillingModal(true)}>
               <Zap size={16} />
               Instant Billing
@@ -679,8 +696,8 @@ export function POS() {
         <button type="button" onClick={() => setMobilePosTab('cart')} className={`rounded-lg px-3 py-2.5 text-sm font-medium ${mobilePosTab === 'cart' ? 'bg-emerald-500 text-white' : 'text-dashboard-text-label'}`}>Cart ({cart.reduce((sum,item)=>sum+item.quantity,0)})</button>
       </div>
 
-      <div className="pos-workspace grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(320px,1fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.85fr)_minmax(340px,1fr)]">
-        <div className={`pos-products-pane min-h-0 min-w-0 flex flex-col gap-4 overflow-hidden ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
+      <div className="pos-workspace grid w-full min-h-0 min-w-0 max-w-full flex-1 gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(320px,1fr)] xl:gap-6 xl:grid-cols-[minmax(0,1.85fr)_minmax(320px,1fr)]">
+        <div className={`pos-products-pane min-h-0 w-full min-w-0 max-w-full flex flex-col gap-4 overflow-hidden ${mobilePosTab === 'products' ? 'pos-pane-active' : ''}`}>
           <section className="glass-card overflow-visible p-5">
             <div className="relative z-10">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -760,7 +777,7 @@ export function POS() {
           )}
           </section>}
 
-          <section ref={cartRef} className="glass-card flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden p-0">
+          <section ref={cartRef} className="glass-card flex min-h-[300px] w-full min-w-0 max-w-full flex-1 flex-col overflow-hidden p-0">
             <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[.16em] text-sky-300">Current sale items</p>
@@ -769,68 +786,68 @@ export function POS() {
               <button type="button" onClick={clearCart} disabled={!cart.length} className="text-xs text-red-300 transition hover:text-red-200 disabled:opacity-40">Clear</button>
             </div>
 
-            <div className="pos-cart-items min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain">
+            <div className="pos-cart-items min-h-0 w-full min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
               {cart.length === 0 ? (
                 <div className="cart-empty flex h-full min-h-[180px] items-center justify-center p-6 text-center text-sm text-dashboard-text-sub">
                   Add products to begin the sale.
                 </div>
               ) : (
-                <table className="w-full min-w-[900px] table-fixed text-left text-xs">
+                <table className="pos-cart-table w-full min-w-0 max-w-full table-fixed text-left text-xs">
                   <colgroup>
-                    <col className="w-[15%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[6%]" />
-                    <col className="w-[7%]" />
-                    <col className="w-[10%]" />
+                    <col className="w-[24%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[16%]" />
                     <col className="w-[13%]" />
-                    <col className="w-[11%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[6%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[7%]" />
                   </colgroup>
                   <thead className="sticky top-0 z-10 bg-[#0a211a] text-[10px] uppercase tracking-wider text-dashboard-text-sub">
                     <tr>
-                      <th className="px-3 py-3 font-semibold">Item</th>
-                      <th className="px-2 py-3 font-semibold">Article</th>
-                      <th className="px-2 py-3 font-semibold">Size</th>
-                      <th className="px-2 py-3 font-semibold">Colour</th>
-                      <th className="px-2 py-3 font-semibold">Barcode</th>
-                      <th className="px-2 py-3 text-center font-semibold">Qty</th>
-                      <th className="px-2 py-3 text-right font-semibold">Price</th>
-                      <th className="px-2 py-3 font-semibold">Discount</th>
-                      <th className="px-2 py-3 text-right font-semibold">Total</th>
-                      <th className="px-2 py-3 text-center font-semibold">Action</th>
+                      <th className="min-w-0 px-2 py-2.5 font-semibold">Item</th>
+                      <th className="min-w-0 px-1.5 py-2.5 font-semibold">Variant</th>
+                      <th className="min-w-0 px-1 py-2.5 text-center font-semibold">Qty</th>
+                      <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Price</th>
+                      <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Discount</th>
+                      <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Total</th>
+                      <th className="min-w-0 px-1 py-2.5 text-center text-[9px] font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
                     {cart.map((item) => (
                       <tr key={item.variant_id} className="bg-white/[.015] align-middle transition hover:bg-white/[.04]">
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate font-medium text-dashboard-text-primary" title={item.product_name}>{item.product_name}</span>
-                            {item.is_instant_sale && <span className="shrink-0 rounded-full bg-dashboard-accent/20 px-1.5 py-0.5 text-[9px] font-medium text-dashboard-accent">Instant</span>}
+                        <td className="min-w-0 overflow-hidden px-2 py-2.5">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="min-w-0 truncate font-medium text-dashboard-text-primary" title={item.product_name}>{item.product_name}</span>
+                            {item.is_instant_sale && <span className="shrink-0 rounded-full bg-dashboard-accent/20 px-1 py-0.5 text-[8px] font-medium text-dashboard-accent">Instant</span>}
                           </div>
+                          {(item.item_number || item.barcode_number) && (
+                            <p className="mt-0.5 truncate text-[10px] text-dashboard-text-sub" title={item.item_number || item.barcode_number || undefined}>
+                              {item.item_number ? `Article: ${item.item_number}` : `Barcode: ${item.barcode_number}`}
+                            </p>
+                          )}
                         </td>
-                        <td className="truncate px-2 py-3 text-dashboard-text-label" title={item.item_number || '-'}>{item.item_number || '-'}</td>
-                        <td className="truncate px-2 py-3 text-dashboard-text-label">{item.size || '-'}</td>
-                        <td className="truncate px-2 py-3 text-dashboard-text-label" title={item.color || '-'}>{item.color || '-'}</td>
-                        <td className="truncate px-2 py-3 font-mono text-[11px] text-dashboard-text-sub" title={item.barcode_number || '-'}>{item.barcode_number || '-'}</td>
-                        <td className="px-2 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button type="button" aria-label={`Decrease ${item.product_name} quantity`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-dashboard-text-primary transition hover:bg-white/10" onClick={() => updateCartQuantity(item.variant_id, item.quantity - 1)}>
+                        <td className="min-w-0 truncate px-1.5 py-2.5 text-dashboard-text-label" title={`${item.size || '-'} / ${item.color || '-'}`}>
+                          {item.size || '-'} / {item.color || '-'}
+                        </td>
+                        <td className="min-w-0 px-1 py-2.5">
+                          <div className="flex min-w-0 items-center justify-center gap-0.5">
+                            <button type="button" aria-label={`Decrease ${item.product_name} quantity`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/10 text-dashboard-text-primary transition hover:bg-white/10" onClick={() => updateCartQuantity(item.variant_id, item.quantity - 1)}>
                               <Minus size={12} />
                             </button>
-                            <span className="min-w-6 text-center font-medium text-dashboard-text-primary">{item.quantity}</span>
-                            <button type="button" aria-label={`Increase ${item.product_name} quantity`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-dashboard-text-primary transition hover:bg-white/10" onClick={() => updateCartQuantity(item.variant_id, item.quantity + 1)}>
+                            <span className="min-w-5 text-center font-medium text-dashboard-text-primary">{item.quantity}</span>
+                            <button type="button" aria-label={`Increase ${item.product_name} quantity`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/10 text-dashboard-text-primary transition hover:bg-white/10" onClick={() => updateCartQuantity(item.variant_id, item.quantity + 1)}>
                               <Plus size={12} />
                             </button>
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-2 py-3 text-right text-dashboard-text-primary">{formatCurrency(item.unit_price)}</td>
-                        <td className="px-2 py-2">
+                        <td className="min-w-0 truncate px-1.5 py-2.5 text-right tabular-nums text-dashboard-text-primary" title={formatCurrency(item.unit_price)}>
+                          {formatCurrency(item.unit_price).replace('LKR', '').trim()}
+                        </td>
+                        <td className="min-w-0 px-1.5 py-2">
                           <Input
                             aria-label={`Discount for ${item.product_name}`}
-                            className="min-h-8 px-2 py-1 text-right text-xs"
+                            className="min-h-7 w-full min-w-0 px-1.5 py-1 text-right text-xs tabular-nums"
                             type="number"
                             min="0"
                             max={item.unit_price * item.quantity}
@@ -839,10 +856,12 @@ export function POS() {
                             onChange={(event) => updateItemDiscount(item.variant_id, Number(event.target.value))}
                           />
                         </td>
-                        <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-dashboard-text-primary">{formatCurrency(item.unit_price * item.quantity - item.discount_amount)}</td>
-                        <td className="px-2 py-3 text-center">
-                          <button type="button" aria-label={`Remove ${item.product_name} from cart`} onClick={() => updateCartQuantity(item.variant_id, 0)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-300">
-                            <Trash2 size={15} />
+                        <td className="min-w-0 truncate px-1.5 py-2.5 text-right font-semibold tabular-nums text-dashboard-text-primary" title={formatCurrency(item.unit_price * item.quantity - item.discount_amount)}>
+                          {formatCurrency(item.unit_price * item.quantity - item.discount_amount).replace('LKR', '').trim()}
+                        </td>
+                        <td className="min-w-0 px-1 py-2.5 text-center">
+                          <button type="button" title="Remove" aria-label={`Remove ${item.product_name} from cart`} onClick={() => updateCartQuantity(item.variant_id, 0)} className="inline-flex h-7 w-7 max-w-full items-center justify-center rounded-md text-red-400 transition hover:bg-red-500/10 hover:text-red-300">
+                            <Trash2 size={14} />
                           </button>
                         </td>
                       </tr>

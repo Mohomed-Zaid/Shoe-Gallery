@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Printer, Save, Shield } from 'lucide-react';
+import { Download, Monitor, Printer, Save, Shield } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { Profile, StoreSettings, UserRole } from '../types';
 import * as settingsService from '../services/settingsService';
@@ -414,6 +414,26 @@ export function Settings() {
         </form>
 
         <div className="space-y-6">
+        <section className="glass-card p-6">
+          <div className="relative z-10">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-dashboard-accent/20 text-dashboard-text-primary"><Monitor size={18} /></div>
+              <div>
+                <h3 className="text-lg font-semibold text-dashboard-text-primary">Customer Display Setup</h3>
+                <p className="text-sm text-dashboard-text-sub">Use a second monitor for the read-only live bill.</p>
+              </div>
+            </div>
+            <ol className="space-y-2 text-sm text-dashboard-text-sub">
+              <li>1. Connect the second monitor.</li>
+              <li>2. Press Windows + P and select <strong className="text-dashboard-text-primary">Extend</strong>.</li>
+              <li>3. Open Shoe Gallery POS and click <strong className="text-dashboard-text-primary">Customer Display</strong>.</li>
+              <li>4. Move the new window to monitor 2, then maximize it or choose Enter Full Screen.</li>
+            </ol>
+            <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-sm font-medium text-amber-100">
+              For customer display, Windows display mode must be set to Extend, not Duplicate.
+            </p>
+          </div>
+        </section>
         <section className="glass-card p-6"><div className="relative z-10"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-dashboard-accent/20"><Download size={18}/></div><div><h3 className="text-lg font-semibold text-dashboard-text-primary">Desktop App</h3><p className="text-sm text-dashboard-text-sub">Install Shoe Gallery POS on this Windows computer.</p></div></div><div className="space-y-2 text-sm text-dashboard-text-sub"><p>1. Open Shoe Gallery POS in Chrome or Edge.</p><p>2. Click “Install Desktop App.”</p><p>3. Confirm installation.</p><p>4. Launch it from the desktop or Start menu.</p></div><div className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><p><span className="text-dashboard-text-sub">Install status:</span> {pwa.isInstalled?'Installed':pwa.canInstall?'Available':'Not currently available'}</p><p><span className="text-dashboard-text-sub">App version:</span> {import.meta.env.VITE_APP_VERSION||'0.0.0'}</p><p><span className="text-dashboard-text-sub">Update status:</span> Updates are checked automatically</p><p><span className="text-dashboard-text-sub">Connection:</span> {navigator.onLine?'Online':'Offline'}</p></div>{pwa.canInstall&&<Button className="mt-5" type="button" onClick={async()=>{const installed=await pwa.install();if(installed)setSuccess('Shoe Gallery POS installed successfully.')}}><Download size={16}/>Install Desktop App</Button>}{!pwa.isInstalled&&!pwa.canInstall&&<p className="mt-4 text-xs text-dashboard-text-sub">If installation is supported, use the install icon in the Chrome or Edge address bar. Installation requires HTTPS in production.</p>}</div></section>
         <div className="glass-card p-6">
           <div className="relative z-10">

@@ -1,9 +1,9 @@
-export const CUSTOMER_DISPLAY_CHANNEL = 'shoe-gallery-pos-display';
-export const CUSTOMER_DISPLAY_STORAGE_KEY = 'shoe-gallery-pos-display-event';
+export const CUSTOMER_DISPLAY_CHANNEL = 'shoe-gallery-customer-display';
+export const CUSTOMER_DISPLAY_STORAGE_KEY = 'shoe-gallery-customer-display-event';
 
 export interface CustomerDisplayItem {
-  id: string;
   productName: string;
+  article: string | null;
   size: string;
   colour: string;
   quantity: number;
@@ -35,7 +35,8 @@ export interface CustomerDisplaySaleCompleted {
 }
 
 export type CustomerDisplayMessage =
-  | { type: 'STATE_REQUEST' }
+  | { type: 'CUSTOMER_DISPLAY_READY' }
+  | { type: 'CUSTOMER_DISPLAY_HEARTBEAT' }
   | { type: 'STATE_UPDATE'; payload: CustomerDisplaySnapshot }
   | { type: 'SALE_COMPLETED'; payload: CustomerDisplaySaleCompleted };
 

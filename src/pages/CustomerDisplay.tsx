@@ -34,6 +34,13 @@ export function CustomerDisplay() {
   const handleMessage = useCallback((message: CustomerDisplayMessage) => {
     if (message.type === 'STATE_UPDATE') {
       setSnapshot(message.payload);
+      if (message.payload.items.length > 0) {
+        setCompletedSale(null);
+        if (completionTimeoutRef.current !== null) {
+          window.clearTimeout(completionTimeoutRef.current);
+          completionTimeoutRef.current = null;
+        }
+      }
       return;
     }
 
@@ -53,8 +60,12 @@ export function CustomerDisplay() {
     if (typeof BroadcastChannel !== 'undefined') {
       const channel = new BroadcastChannel(CUSTOMER_DISPLAY_CHANNEL);
       channel.onmessage = (event: MessageEvent<CustomerDisplayMessage>) => handleMessage(event.data);
-      channel.postMessage({ type: 'STATE_REQUEST' } satisfies CustomerDisplayMessage);
+      channel.postMessage({ type: 'CUSTOMER_DISPLAY_READY' } satisfies CustomerDisplayMessage);
+      const heartbeat = window.setInterval(() => {
+        channel.postMessage({ type: 'CUSTOMER_DISPLAY_HEARTBEAT' } satisfies CustomerDisplayMessage);
+      }, 3000);
       return () => {
+        window.clearInterval(heartbeat);
         channel.close();
         if (completionTimeoutRef.current !== null) window.clearTimeout(completionTimeoutRef.current);
       };
@@ -66,8 +77,12 @@ export function CustomerDisplay() {
       if (message) handleMessage(message);
     };
     window.addEventListener('storage', handleStorage);
-    sendCustomerDisplayFallback({ type: 'STATE_REQUEST' });
+    sendCustomerDisplayFallback({ type: 'CUSTOMER_DISPLAY_READY' });
+    const heartbeat = window.setInterval(() => {
+      sendCustomerDisplayFallback({ type: 'CUSTOMER_DISPLAY_HEARTBEAT' });
+    }, 3000);
     return () => {
+      window.clearInterval(heartbeat);
       window.removeEventListener('storage', handleStorage);
       if (completionTimeoutRef.current !== null) window.clearTimeout(completionTimeoutRef.current);
     };
@@ -171,12 +186,15 @@ export function CustomerDisplay() {
                 </thead>
                 <tbody className="text-sm sm:text-lg">
                   {snapshot!.items.map((item, index) => (
-                    <tr key={item.id} className="odd:bg-white even:bg-[#fff9f4]">
+                    <tr key={`${item.article ?? item.productName}-${item.size}-${item.colour}-${index}`} className="odd:bg-white even:bg-[#fff9f4]">
                       <td className="border-b border-r border-[#d8b8bd] px-3 py-4 text-center font-semibold text-[#8e4a5c]">{index + 1}</td>
                       <td className="border-b border-r border-[#d8b8bd] px-3 py-4 text-center font-bold tabular-nums">{item.quantity}</td>
-                      <td className="border-b border-r border-[#d8b8bd] px-3 py-4 font-semibold">{itemDescription(item)}</td>
+                      <td className="border-b border-r border-[#d8b8bd] px-3 py-4 font-semibold">
+                        <span>{itemDescription(item)}</span>
+                        {item.article && <span className="mt-1 block text-xs font-normal text-[#77716a]">Article: {item.article}</span>}
+                      </td>
                       <td className="border-b border-r border-[#d8b8bd] px-3 py-4 text-right tabular-nums">{formatCurrency(item.unitPrice)}</td>
-                      <td className="border-b border-r border-[#d8b8bd] px-3 py-4 text-right tabular-nums">{item.discount > 0 ? formatCurrency(item.discount) : ''}</td>
+                      <td className="border-b border-r border-[#d8b8bd] px-3 py-4 text-right tabular-nums">{item.discount > 0 ? formatCurrency(item.discount) : '0.00'}</td>
                       <td className="border-b border-[#d8b8bd] px-3 py-4 text-right font-bold tabular-nums">{formatCurrency(item.lineTotal)}</td>
                     </tr>
                   ))}
@@ -188,17 +206,15 @@ export function CustomerDisplay() {
               <div className="border-b border-[#d8b8bd] px-5 py-4 md:border-b-0 md:border-r sm:px-7">
                 <p className="text-xs font-bold uppercase tracking-[.18em] text-[#8e4a5c]">Payment</p>
                 <p className="mt-1 text-xl font-bold text-[#173f2d]">{paymentLabels[snapshot!.paymentMethod]}</p>
-                {snapshot!.paymentMethod === 'cash' && snapshot!.amountReceived > 0 && (
-                  <div className="mt-3 grid grid-cols-2 gap-4 text-sm sm:text-base">
-                    <div><p className="text-[#71746e]">Amount Received</p><p className="font-bold tabular-nums">{formatCurrency(snapshot!.amountReceived)}</p></div>
-                    <div><p className="text-[#71746e]">Change Due</p><p className="font-bold tabular-nums text-[#a44860]">{formatCurrency(snapshot!.changeDue)}</p></div>
-                  </div>
-                )}
+                <div className="mt-3 grid grid-cols-2 gap-4 text-sm sm:text-base">
+                  <div><p className="text-[#71746e]">Amount Received</p><p className="font-bold tabular-nums">{formatCurrency(snapshot!.amountReceived)}</p></div>
+                  <div><p className="text-[#71746e]">Change Due</p><p className="font-bold tabular-nums text-[#a44860]">{formatCurrency(snapshot!.changeDue)}</p></div>
+                </div>
               </div>
               <div className="space-y-1.5 px-5 py-3 text-sm sm:px-7 sm:text-base">
                 <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Subtotal</span><span className="font-semibold tabular-nums">{formatCurrency(snapshot!.subtotal)}</span></div>
-                {snapshot!.itemDiscount > 0 && <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Item Discount</span><span className="font-semibold tabular-nums"> {formatCurrency(snapshot!.itemDiscount)}</span></div>}
-                <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Sale Discount</span><span className="font-semibold tabular-nums"> {formatCurrency(snapshot!.saleDiscount)}</span></div>
+                {snapshot!.itemDiscount > 0 && <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Item Discount</span><span className="font-semibold tabular-nums">- {formatCurrency(snapshot!.itemDiscount)}</span></div>}
+                <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Sale Discount</span><span className="font-semibold tabular-nums">- {formatCurrency(snapshot!.saleDiscount)}</span></div>
                 {snapshot!.paymentFee > 0 && <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Card Fee</span><span className="font-semibold tabular-nums">{formatCurrency(snapshot!.paymentFee)}</span></div>}
                 <div className="mt-2 flex items-end justify-between gap-5 border-t border-[#c98ea0] pt-2 text-[#173f2d]">
                   <span className="text-lg font-black uppercase tracking-[.08em] sm:text-2xl">Grand Total</span>
