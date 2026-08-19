@@ -1,4 +1,4 @@
-import { BarChart3, Boxes, CircleDollarSign, RotateCcw, ShoppingCart, TrendingUp } from 'lucide-react';
+import { Banknote, BarChart3, Boxes, CircleDollarSign, RotateCcw, ShoppingCart, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/ui';
 
@@ -9,6 +9,7 @@ const reports = [
   { path: '/reports/returns', title: 'Returns Report', icon: RotateCcw },
   { path: '/reports/profit', title: 'Profit Report', icon: TrendingUp },
   { path: '/reports/cashup', title: 'Cashup Report', icon: CircleDollarSign },
+  { path: '/reports/expenses', title: 'Expenses Report', icon: Banknote },
 ];
 
 export function ReportsHomePage() {

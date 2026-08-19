@@ -1,10 +1,12 @@
 import { supabase } from './supabase';
+import { getTodayExpenseTotal } from './expenseReportService';
 
 export type SalesTrendFilter = 'today' | '7d' | '30d' | 'month';
 
 export interface DashboardCards {
   todaySales: number;
   todayRevenue: number;
+  todayExpenses: number;
   todayProfit: number;
   todayReturns: number;
   totalProducts: number;
@@ -49,7 +51,7 @@ function addDays(date: string, days: number) {
 
 export async function getDashboardCards(): Promise<DashboardCards> {
   const today = businessDate();
-  const [businessResult, returnsResult, inventoryResult] = await Promise.all([
+  const [businessResult, returnsResult, inventoryResult, expensesResult] = await Promise.all([
     supabase.rpc('get_profit_dashboard_summary', { p_start_date: today, p_end_date: today }),
     supabase.rpc('get_returns_report', {
       p_start_date: today, p_end_date: today, p_search: null, p_return_type: null,
@@ -60,6 +62,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
       p_search: null, p_category_id: null, p_brand_id: null, p_stock_status: null,
       p_page: 1, p_page_size: 25, p_sort: 'product_asc',
     }),
+    getTodayExpenseTotal(),
   ]);
   if (businessResult.error) throw businessResult.error;
   if (returnsResult.error) throw returnsResult.error;
@@ -73,6 +76,7 @@ export async function getDashboardCards(): Promise<DashboardCards> {
   return {
     todaySales: Number(business.sales ?? 0),
     todayRevenue: Number(business.revenue ?? 0),
+    todayExpenses: expensesResult,
     todayProfit: Number(business.profit ?? 0),
     todayReturns: Number(returns.summary?.return_value ?? 0),
     totalProducts: Number(summary.total_products ?? 0),

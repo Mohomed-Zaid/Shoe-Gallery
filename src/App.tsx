@@ -38,6 +38,7 @@ import { InventoryReportPage } from './pages/InventoryReportPage';
 import { ReturnsReportPage } from './pages/ReturnsReportPage';
 import { ProfitReportPage } from './pages/ProfitReportPage';
 import { CashupReportPage } from './pages/CashupReportPage';
+import { ExpensesReportPage } from './pages/ExpensesReportPage';
 import { CustomerDisplay } from './pages/CustomerDisplay';
 
 const BarcodePrinting = lazy(() => import('./pages/BarcodePrinting').then((module) => ({ default: module.BarcodePrinting })));
@@ -91,7 +92,8 @@ function App() {
                       <Route path="/reports/inventory" element={<InventoryReportPage />} />
                       <Route path="/reports/returns" element={<ReturnsReportPage />} />
                       <Route path="/reports/profit" element={<ProfitReportPage />} />
-              <Route path="/reports/cashup" element={<CashupReportPage />} />
+                      <Route path="/reports/cashup" element={<CashupReportPage />} />
+                      <Route path="/reports/expenses" element={<ExpensesReportPage />} />
                       <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><Settings /></ProtectedRoute>} />
                       <Route path="/admin/subscription" element={<SubscriptionManagementPage />} />
                       <Route path="*" element={<Navigate to="/" replace />} />

@@ -11,6 +11,7 @@ import {
   CreditCard,
   CircleDollarSign,
   ReceiptText,
+  Banknote,
   RotateCcw,
   BarChart3,
   Settings,
@@ -34,6 +35,7 @@ export const reportNavItems: NavItem[] = [
   { path: '/reports/returns', label: 'Returns Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.returns.view' },
   { path: '/reports/profit', label: 'Profit Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.profit.view' },
   { path: '/reports/cashup', label: 'Cashup Report', icon: BarChart3, roles: ['admin', 'cashier'], permission: 'reports.cashup.view' },
+  { path: '/reports/expenses', label: 'Expenses Report', icon: Banknote, roles: ['admin', 'cashier'], permission: 'reports.expenses.view' },
 ];
 
 export const navItems: NavItem[] = [

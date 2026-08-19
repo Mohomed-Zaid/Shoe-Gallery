@@ -723,6 +723,7 @@
 .profit-report-table { max-width: 100%; overscroll-behavior-x: contain; }
 .cashup-report-page { min-width: 0; max-width: 100%; overflow-x: hidden; }
 .cashup-report-table { max-width: 100%; overscroll-behavior-x: contain; }
+.expenses-report-table { max-width: 100%; overscroll-behavior-x: contain; }
 
 @media print {
   /* ── Global reset ── */
@@ -930,6 +931,9 @@
   .cashup-report-page > :not(.cashup-report-print) { display: none !important; }
   .cashup-report-print { display: block !important; }
   .cashup-report-print .grid { display: grid !important; grid-template-columns: repeat(4, 1fr); margin-bottom: 12pt; }
+  .expenses-report-page > :not(.expenses-report-print) { display: none !important; }
+  .expenses-report-print { display: block !important; }
+  .expenses-report-print .report-kpi-grid { grid-template-columns: repeat(5, 1fr); margin-bottom: 12pt; }
 
   .business-report-print-area * {
     color: #1e293b !important;
