@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, ShoppingBag } from 'lucide-react';
+import { Maximize2, Minimize2, RotateCcw, ShoppingBag } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import {
   CUSTOMER_DISPLAY_CHANNEL,
@@ -7,6 +7,7 @@ import {
   readCustomerDisplayFallback,
   sendCustomerDisplayFallback,
   type CustomerDisplayMessage,
+  type CustomerDisplayReturn,
   type CustomerDisplaySaleCompleted,
   type CustomerDisplaySnapshot,
 } from '../types/customerDisplay';
@@ -28,14 +29,47 @@ function itemDescription(item: CustomerDisplaySnapshot['items'][number]) {
 export function CustomerDisplay() {
   const [snapshot, setSnapshot] = useState<CustomerDisplaySnapshot | null>(null);
   const [completedSale, setCompletedSale] = useState<CustomerDisplaySaleCompleted | null>(null);
+  const [returnMode, setReturnMode] = useState(false);
+  const [returnItem, setReturnItem] = useState<CustomerDisplayReturn | null>(null);
+  const [completedReturn, setCompletedReturn] = useState<CustomerDisplayReturn | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const completionTimeoutRef = useRef<number | null>(null);
 
   const handleMessage = useCallback((message: CustomerDisplayMessage) => {
+    if (message.type === 'RETURN_MODE') {
+      setReturnMode(true);
+      setReturnItem(message.payload);
+      setCompletedReturn(null);
+      setCompletedSale(null);
+      return;
+    }
+
+    if (message.type === 'RETURN_CANCELLED') {
+      setReturnMode(false);
+      setReturnItem(null);
+      setCompletedReturn(null);
+      return;
+    }
+    if (message.type === 'RETURN_COMPLETED') {
+      setReturnMode(false);
+      setReturnItem(null);
+      setCompletedReturn(message.payload);
+      setCompletedSale(null);
+      if (completionTimeoutRef.current !== null) window.clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = window.setTimeout(() => {
+        setCompletedReturn(null);
+        completionTimeoutRef.current = null;
+      }, THANK_YOU_DURATION_MS);
+      return;
+    }
+
     if (message.type === 'STATE_UPDATE') {
       setSnapshot(message.payload);
       if (message.payload.items.length > 0) {
         setCompletedSale(null);
+        setCompletedReturn(null);
+        setReturnMode(false);
+        setReturnItem(null);
         if (completionTimeoutRef.current !== null) {
           window.clearTimeout(completionTimeoutRef.current);
           completionTimeoutRef.current = null;
@@ -102,6 +136,32 @@ export function CustomerDisplay() {
     }
   };
 
+  if (completedReturn) {
+    return (
+      <main className="flex h-screen items-center justify-center bg-[#f2ecdf] p-6 text-[#17251e]">
+        <section className="w-full max-w-4xl rounded-[2rem] border-2 border-emerald-700/20 bg-[#fffdf7] px-8 py-16 text-center shadow-2xl">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-700 text-white"><RotateCcw size={38}/></div>
+          <p className="mt-8 text-sm font-bold uppercase tracking-[.32em] text-[#8a5b42]">Return Completed</p>
+          <h1 className="mt-3 text-4xl font-black text-[#173f2d] sm:text-6xl">{completedReturn.productName}</h1>
+          <p className="mt-3 text-xl text-[#59635d]">{completedReturn.variant}</p>
+          <p className="mt-8 text-lg uppercase tracking-[.18em] text-[#6f766f]">Return Amount</p>
+          <p className="mt-2 text-4xl font-black tabular-nums text-[#173f2d] sm:text-6xl">{formatCurrency(completedReturn.returnAmount)}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (returnMode) {
+    return (
+      <main className="flex h-screen items-center justify-center bg-[#f4ead7] p-6 text-[#17251e]">
+        <section className="w-full max-w-4xl rounded-[2rem] border-2 border-amber-700/25 bg-[#fffdf7] px-8 py-16 text-center shadow-2xl">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-600 text-white"><RotateCcw size={38}/></div>
+          <p className="mt-8 text-sm font-bold uppercase tracking-[.32em] text-amber-700">Return</p>
+          {returnItem ? <><h1 className="mt-3 text-4xl font-black text-[#173f2d] sm:text-6xl">{returnItem.productName}</h1><p className="mt-3 text-xl text-[#59635d]">{returnItem.variant}</p><p className="mt-8 text-lg uppercase tracking-[.18em] text-[#6f766f]">Return Amount</p><p className="mt-2 text-4xl font-black tabular-nums text-amber-700 sm:text-6xl">{formatCurrency(returnItem.returnAmount)}</p></> : <><h1 className="mt-3 text-4xl font-black text-[#173f2d] sm:text-6xl">RETURN MODE</h1><p className="mt-5 text-xl text-[#59635d]">Please scan the returned item.</p></>}
+        </section>
+      </main>
+    );
+  }
   if (completedSale) {
     return (
       <main className="flex h-screen min-h-0 items-center justify-center overflow-hidden bg-[#f2ecdf] p-5 text-[#17251e] sm:p-10">

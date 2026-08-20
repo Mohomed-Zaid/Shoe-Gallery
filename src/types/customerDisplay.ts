@@ -33,12 +33,20 @@ export interface CustomerDisplaySaleCompleted {
   amountReceived: number;
   changeDue: number;
 }
+export interface CustomerDisplayReturn {
+  productName: string;
+  variant: string;
+  returnAmount: number;
+}
 
 export type CustomerDisplayMessage =
   | { type: 'CUSTOMER_DISPLAY_READY' }
   | { type: 'CUSTOMER_DISPLAY_HEARTBEAT' }
   | { type: 'STATE_UPDATE'; payload: CustomerDisplaySnapshot }
-  | { type: 'SALE_COMPLETED'; payload: CustomerDisplaySaleCompleted };
+  | { type: 'SALE_COMPLETED'; payload: CustomerDisplaySaleCompleted }
+  | { type: 'RETURN_MODE'; payload: CustomerDisplayReturn | null }
+  | { type: 'RETURN_CANCELLED' }
+  | { type: 'RETURN_COMPLETED'; payload: CustomerDisplayReturn };
 
 export function sendCustomerDisplayFallback(message: CustomerDisplayMessage) {
   try {

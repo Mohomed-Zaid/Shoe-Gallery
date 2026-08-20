@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, CreditCard, LayoutGrid, Minus, Monitor, Package2, Plus, Printer, ScanLine, Search, Trash2, Zap } from 'lucide-react';
+import { CheckCircle2, ChevronDown, CreditCard, LayoutGrid, Minus, Monitor, Package2, Plus, Printer, RotateCcw, ScanLine, Search, Trash2, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import type { Category, Customer, Product, ProductVariant, StoreSettings } from '../types';
 import type { CartItem, SaleWithRelations } from '../services/salesService';
+import type { POSReturnCandidate, SalesReturnRecord } from '../types/salesReturn';
 import * as categoryService from '../services/categoryService';
 import * as customerService from '../services/customerService';
 import * as productService from '../services/productService';
 import * as salesService from '../services/salesService';
+import * as salesReturnService from '../services/salesReturnService';
 import * as settingsService from '../services/settingsService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
@@ -26,7 +28,8 @@ import { POSItemNumberInput } from '../components/pos/POSItemNumberInput';
 import { ProductVariantSelector } from '../components/pos/ProductVariantSelector';
 import type { POSProduct } from '../services/productService';
 import { ThermalReceipt } from '../components/receipt/ThermalReceipt';
-import { printReceiptAutomatically } from '../services/receiptPrintService';
+import { ReturnReceipt } from '../components/receipt/ReturnReceipt';
+import { printReceipt, printReceiptAutomatically } from '../services/receiptPrintService';
 import {
   CUSTOMER_DISPLAY_CHANNEL,
   CUSTOMER_DISPLAY_STORAGE_KEY,
@@ -102,6 +105,16 @@ export function POS() {
   const [saleNotes, setSaleNotes] = useState('');
   const [showSaleNotes, setShowSaleNotes] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [returnMode, setReturnMode] = useState(false);
+  const [returnCandidates, setReturnCandidates] = useState<POSReturnCandidate[]>([]);
+  const [selectedReturn, setSelectedReturn] = useState<POSReturnCandidate | null>(null);
+  const [returnQuantity, setReturnQuantity] = useState(1);
+  const [returnToStock, setReturnToStock] = useState(true);
+  const [refundMethod, setRefundMethod] = useState('cash');
+  const [refundReference, setRefundReference] = useState('');
+  const [returnReason, setReturnReason] = useState('POS barcode return');
+  const [isCompletingReturn, setIsCompletingReturn] = useState(false);
+  const [completedReturn, setCompletedReturn] = useState<SalesReturnRecord | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showHeldSalesModal, setShowHeldSalesModal] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
@@ -413,6 +426,147 @@ export function POS() {
     setBarcodeInput('');
   }, [addVariantToCart, focusBarcodeInput, variants]);
 
+  const enterReturnMode = useCallback(() => {
+    setReturnMode(true);
+    setReturnCandidates([]);
+    setSelectedReturn(null);
+    setBarcodeInput('');
+    setShowProductBrowser(false);
+    setError(null);
+    setSuccess(null);
+    broadcastCustomerDisplay({ type: 'RETURN_MODE', payload: null });
+    focusBarcodeInput();
+  }, [broadcastCustomerDisplay, focusBarcodeInput]);
+
+  const cancelReturnMode = useCallback(() => {
+    setReturnMode(false);
+    setReturnCandidates([]);
+    setSelectedReturn(null);
+    setBarcodeInput('');
+    broadcastCustomerDisplay({ type: 'RETURN_CANCELLED' });
+    focusBarcodeInput();
+  }, [broadcastCustomerDisplay, focusBarcodeInput]);
+
+  const chooseReturnCandidate = useCallback((candidate: POSReturnCandidate) => {
+    setSelectedReturn(candidate);
+    setReturnQuantity(1);
+    setReturnToStock(true);
+    setRefundMethod('cash');
+    setRefundReference('');
+    setReturnReason('POS barcode return');
+    broadcastCustomerDisplay({
+      type: 'RETURN_MODE',
+      payload: {
+        productName: candidate.product_name,
+        variant: [candidate.size, candidate.colour].filter(Boolean).join(' / '),
+        returnAmount: Number(candidate.return_unit_value),
+      },
+    });
+  }, [broadcastCustomerDisplay]);
+
+  const handleReturnBarcodeScan = useCallback(async (barcode: string) => {
+    const value = barcode.trim();
+    if (!value) return;
+    setError(null);
+    try {
+      const variantResult = await productService.getVariantByBarcode(value);
+      if (variantResult.error) throw variantResult.error;
+      if (!variantResult.data) {
+        setError('Barcode not found.');
+        return;
+      }
+      const candidates = await salesReturnService.getPOSReturnCandidates(value);
+      setBarcodeInput('');
+      if (!candidates.length) {
+        setError('This barcode exists, but no completed historical sale was found.');
+        return;
+      }
+      const eligible = candidates.filter((candidate) => candidate.eligible);
+      if (!eligible.length) {
+        if (candidates.every((candidate) => candidate.available_quantity <= 0)) {
+          setError('This item has already been fully returned.');
+        } else if (candidates.every((candidate) => candidate.return_period_expired)) {
+          setError('Return period has expired.');
+        } else {
+          setError('No eligible completed sale was found for this barcode.');
+        }
+        return;
+      }
+      playScanSuccessSound();
+      setReturnCandidates(eligible);
+      if (eligible.length === 1) chooseReturnCandidate(eligible[0]);
+    } catch (scanError) {
+      setError(getErrorMessage(scanError));
+    } finally {
+      focusBarcodeInput();
+    }
+  }, [chooseReturnCandidate, focusBarcodeInput]);
+
+  const returnValue = selectedReturn ? Number(selectedReturn.return_unit_value) * returnQuantity : 0;
+
+  const handleConfirmReturn = async () => {
+    if (!selectedReturn) return;
+    if (returnQuantity < 1 || returnQuantity > selectedReturn.available_quantity) {
+      setError('Return quantity cannot exceed the available quantity.');
+      return;
+    }
+    if ((refundMethod === 'card' || refundMethod === 'bank_transfer') && !refundReference.trim()) {
+      setError('A reference is required for card and bank transfer refunds.');
+      return;
+    }
+    setIsCompletingReturn(true);
+    setError(null);
+    try {
+      const refundAmount = refundMethod === 'no_refund' ? 0 : returnValue;
+      const returnId = await salesReturnService.completeSalesReturn({
+        sale_id: selectedReturn.sale_id,
+        return_type: refundAmount > 0 ? 'refund' : 'no_refund',
+        reason: returnReason.trim() || 'POS barcode return',
+        refund_method: refundMethod,
+        refund_amount: refundAmount,
+        store_credit_amount: 0,
+        refund_reference: refundReference.trim(),
+        items: [{
+          sale_item_id: selectedReturn.sale_item_id,
+          quantity: returnQuantity,
+          condition: returnToStock ? 'resellable' : 'damaged',
+          restock: returnToStock,
+        }],
+      });
+      const record = await salesReturnService.getSalesReturn(returnId);
+      setCompletedReturn(record);
+      setReturnMode(false);
+      setReturnCandidates([]);
+      setSelectedReturn(null);
+      setBarcodeInput('');
+      setSuccess('Return completed against ' + selectedReturn.invoice_number + '. Scan the replacement as a normal new sale.');
+      broadcastCustomerDisplay({
+        type: 'RETURN_COMPLETED',
+        payload: {
+          productName: selectedReturn.product_name,
+          variant: [selectedReturn.size, selectedReturn.colour].filter(Boolean).join(' / '),
+          returnAmount: returnValue,
+        },
+      });
+      await fetchData();
+      focusBarcodeInput();
+    } catch (returnError) {
+      setError(getErrorMessage(returnError));
+    } finally {
+      setIsCompletingReturn(false);
+    }
+  };
+
+  const printReturnReceipt = useCallback(() => {
+    if (!completedReturn) return;
+    try {
+      printReceipt(<ReturnReceipt record={completedReturn} store={storeSettings}/>, {
+        orientation: storeSettings?.receipt_orientation ?? 'landscape',
+      });
+    } catch (printError) {
+      setError(getErrorMessage(printError, 'Unable to open return receipt.'));
+    }
+  }, [completedReturn, storeSettings]);
   const updateCartQuantity = (variantId: string, quantity: number) => {
     if (quantity <= 0) {
       setCart((currentCart) => currentCart.filter((item) => item.variant_id !== variantId));
@@ -732,7 +886,11 @@ export function POS() {
               <span className={isCustomerDisplayConnected ? 'h-1.5 w-1.5 rounded-full bg-emerald-400' : 'h-1.5 w-1.5 rounded-full bg-slate-500'} />
               {isCustomerDisplayConnected ? 'Display connected' : 'Display not connected'}
             </span>
-            <Button variant="secondary" onClick={() => setShowInstantBillingModal(true)}>
+            <Button variant={returnMode ? 'danger' : 'secondary'} onClick={returnMode ? cancelReturnMode : enterReturnMode}>
+              <RotateCcw size={16} />
+              {returnMode ? 'Cancel Return' : 'Return'}
+            </Button>
+            <Button variant="secondary" onClick={() => setShowInstantBillingModal(true)} disabled={returnMode}>
               <Zap size={16} />
               Instant Billing
             </Button>
@@ -746,6 +904,7 @@ export function POS() {
 
       {error && <Alert message={error} />}
       {success && <div role="status" className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{success}</div>}
+      {returnMode && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-3 text-amber-100"><div className="flex items-center gap-2"><RotateCcw size={18}/><div><strong className="tracking-[.14em]">RETURN MODE</strong><p className="text-xs text-amber-100/75">Scan the exact barcode printed on the returned product.</p></div></div><Button size="sm" variant="danger" onClick={cancelReturnMode}>Cancel Return</Button></div>}
 
       <div className="pos-mobile-tabs grid grid-cols-2 rounded-xl border border-white/10 bg-white/[.04] p-1">
         <button type="button" onClick={() => setMobilePosTab('products')} className={`rounded-lg px-3 py-2.5 text-sm font-medium ${mobilePosTab === 'products' ? 'bg-emerald-500 text-white' : 'text-dashboard-text-label'}`}>Products</button>
@@ -757,12 +916,12 @@ export function POS() {
           <section className="glass-card overflow-visible p-5">
             <div className="relative z-10">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-sky-300">Fast add</p><h2 className="mt-1 font-semibold text-dashboard-text-primary">Add an item to the invoice</h2></div>
+                <div><p className={returnMode ? "text-xs font-semibold uppercase tracking-[.16em] text-amber-300" : "text-xs font-semibold uppercase tracking-[.16em] text-sky-300"}>{returnMode ? "RETURN MODE" : "Fast add"}</p><h2 className="mt-1 font-semibold text-dashboard-text-primary">{returnMode ? "Scan Barcode to Return Item" : "Add an item to the invoice"}</h2></div>
                 <span className="hidden rounded-full bg-white/[.06] px-3 py-1 text-xs text-dashboard-text-sub sm:block">Barcode · Item number · Manual search</span>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="flex items-center justify-between text-sm font-medium text-dashboard-text-label"><span>Scan Barcode</span><ScanLine size={16}/></label>
+                  <label className="flex items-center justify-between text-sm font-medium text-dashboard-text-label"><span>{returnMode ? "Scan Barcode to Return Item" : "Scan Barcode"}</span><ScanLine size={16}/></label>
                 <div className="relative">
                   <Input
                     ref={barcodeInputRef}
@@ -771,24 +930,24 @@ export function POS() {
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();
-                        void handleBarcodeScan(barcodeInput);
+                        void (returnMode ? handleReturnBarcodeScan(barcodeInput) : handleBarcodeScan(barcodeInput));
                       }
                     }}
-                    placeholder="Scan or enter barcode"
+                    placeholder={returnMode ? "Scan barcode to return item" : "Scan or enter barcode"}
                     className="pl-10"
                   />
                   <ScanLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16} />
                 </div>
               </div>
-              <POSItemNumberInput inputRef={itemNumberInputRef} onSelect={(product) => setItemNumberProduct(product)} onError={setError}/>
+              {!returnMode && <POSItemNumberInput inputRef={itemNumberInputRef} onSelect={(product) => setItemNumberProduct(product)} onError={setError}/>}
             </div>
-              <button type="button" onClick={() => setShowProductBrowser((open) => !open)} className="mt-4 flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.035] px-4 py-3 text-sm text-dashboard-text-label transition hover:bg-white/[.07] hover:text-dashboard-text-primary">
+              <button type="button" disabled={returnMode} onClick={() => setShowProductBrowser((open) => !open)} className="mt-4 flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.035] px-4 py-3 text-sm text-dashboard-text-label transition hover:bg-white/[.07] hover:text-dashboard-text-primary">
                 <span className="flex items-center gap-2"><LayoutGrid size={16}/>Search products manually</span><ChevronDown size={16} className={`transition ${showProductBrowser ? 'rotate-180' : ''}`}/>
               </button>
             </div>
           </section>
 
-          {showProductBrowser && <section className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto overscroll-contain pr-1">
+          {showProductBrowser && !returnMode && <section className="max-h-[45%] shrink-0 space-y-4 overflow-y-auto overscroll-contain pr-1">
             <div className="glass-card grid gap-3 p-4 sm:grid-cols-[1fr_220px]">
               <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16}/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Product name or article number" className="pl-10"/></div>
               <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select>
@@ -1087,6 +1246,69 @@ export function POS() {
         <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="text-xs text-dashboard-text-sub">Grand Total</p><p className="truncate text-lg font-bold text-dashboard-text-primary">{formatCurrency(grandTotal)}</p></div><Button className="min-h-12 flex-1" onClick={() => void handleCompleteSale()} disabled={!cart.length || isCompletingSale || hasInvalidDiscountPrice}><CreditCard size={17}/>{isCompletingSale ? 'Completing…' : 'Complete Sale'}</Button></div>
       </div>}
 
+      {(returnCandidates.length > 0 || selectedReturn) && (
+        <Modal title={selectedReturn ? 'Return Item' : 'Select Original Sale'} onClose={() => { setReturnCandidates([]); setSelectedReturn(null); focusBarcodeInput(); }} size="lg">
+          {!selectedReturn ? (
+            <div className="space-y-3">
+              <p className="text-sm text-dashboard-text-sub">This barcode was sold more than once. Select the correct original invoice.</p>
+              {returnCandidates.map((candidate) => (
+                <button key={candidate.sale_item_id} type="button" onClick={() => chooseReturnCandidate(candidate)} className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.04] p-4 text-left transition hover:border-amber-300/40 hover:bg-amber-400/10">
+                  <div><p className="font-semibold text-dashboard-text-primary">{candidate.invoice_number}</p><p className="text-xs text-dashboard-text-sub">{new Date(candidate.sold_at).toLocaleDateString('en-GB')} · {candidate.product_name} · {[candidate.size, candidate.colour].filter(Boolean).join(' / ')}</p></div>
+                  <div className="text-right"><p className="font-semibold">{formatCurrency(Number(candidate.return_unit_value))}</p><p className="text-xs text-emerald-300">Qty {candidate.available_quantity} available</p></div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {returnCandidates.length > 1 && <button type="button" className="text-xs font-medium text-sky-300" onClick={() => setSelectedReturn(null)}>Choose a different invoice</button>}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ReturnFact label="Product" value={selectedReturn.product_name}/>
+                <ReturnFact label="Article" value={selectedReturn.article || '—'}/>
+                <ReturnFact label="Variant" value={[selectedReturn.size, selectedReturn.colour].filter(Boolean).join(' / ') || '—'}/>
+                <ReturnFact label="Barcode" value={selectedReturn.barcode_number}/>
+                <ReturnFact label="Original Invoice" value={selectedReturn.invoice_number}/>
+                <ReturnFact label="Sold Date" value={new Date(selectedReturn.sold_at).toLocaleDateString('en-GB')}/>
+                <ReturnFact label="Original Qty" value={String(selectedReturn.original_quantity)}/>
+                <ReturnFact label="Already Returned" value={String(selectedReturn.already_returned)}/>
+                <ReturnFact label="Available to Return" value={String(selectedReturn.available_quantity)}/>
+                <ReturnFact label="Actual Sold Price" value={formatCurrency(Number(selectedReturn.return_unit_value))}/>
+                <ReturnFact label="Current Stock" value={String(selectedReturn.current_stock)}/>
+                <ReturnFact label="New Stock" value={String(selectedReturn.current_stock + (returnToStock ? returnQuantity : 0))}/>
+              </div>
+              <div className="grid gap-4 border-t border-white/10 pt-4 sm:grid-cols-2">
+                <Input label="Return Qty" type="number" min={1} max={selectedReturn.available_quantity} value={returnQuantity} onChange={(event) => setReturnQuantity(Math.max(1, Math.min(selectedReturn.available_quantity, Number(event.target.value) || 1)))}/>
+                <Select label="Refund Method" value={refundMethod} onChange={(event) => setRefundMethod(event.target.value)}>
+                  <option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="original_payment_method">Original Payment Method</option><option value="no_refund">No Refund / Return Credit Handled Separately</option>
+                </Select>
+                {(refundMethod === 'card' || refundMethod === 'bank_transfer') && <Input label="Refund Reference" value={refundReference} onChange={(event) => setRefundReference(event.target.value)}/>}
+                <Input label="Reason" value={returnReason} onChange={(event) => setReturnReason(event.target.value)}/>
+                <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[.04] px-4 py-3 text-sm text-dashboard-text-primary sm:col-span-2">
+                  <input type="checkbox" checked={returnToStock} onChange={(event) => setReturnToStock(event.target.checked)} className="h-4 w-4 accent-emerald-500"/>
+                  <span><strong>Return to Stock</strong><span className="block text-xs font-normal text-dashboard-text-sub">Untick for damaged or non-resellable items.</span></span>
+                </label>
+              </div>
+              <div className="rounded-xl border border-amber-300/25 bg-amber-400/10 p-4">
+                <div className="flex items-center justify-between gap-3"><span>Return Value</span><strong className="text-xl text-amber-200">{formatCurrency(returnValue)}</strong></div>
+                <div className="mt-1 flex items-center justify-between gap-3 text-xs text-dashboard-text-sub"><span>Restock</span><span>{returnToStock ? 'Yes' : 'No'}</span></div>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={() => { setReturnCandidates([]); setSelectedReturn(null); focusBarcodeInput(); }}>Cancel</Button>
+                <Button className="flex-1" disabled={isCompletingReturn} onClick={() => void handleConfirmReturn()}><CheckCircle2 size={17}/>{isCompletingReturn ? 'Confirming…' : 'Confirm Return'}</Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {completedReturn && (
+        <Modal title="Return Completed" onClose={() => setCompletedReturn(null)}>
+          <div className="space-y-5 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300"><CheckCircle2 size={28}/></div>
+            <div><p className="text-lg font-semibold text-dashboard-text-primary">{completedReturn.return_number}</p><p className="mt-1 text-sm text-dashboard-text-sub">The return is recorded and RETURN MODE has closed. The replacement can now be sold as a normal new sale.</p></div>
+            <div className="flex gap-3"><Button variant="secondary" className="flex-1" onClick={() => setCompletedReturn(null)}>Done</Button><Button className="flex-1" onClick={printReturnReceipt}><Printer size={16}/>Print Return Receipt</Button></div>
+          </div>
+        </Modal>
+      )}
       {selectedProduct && (
         <Modal title={`Select Variant - ${selectedProduct.name}`} onClose={() => setSelectedProduct(null)} size="lg">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1198,4 +1420,7 @@ export function POS() {
       )}
     </div>
   );
+}
+function ReturnFact({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-white/[.04] p-3"><p className="text-xs uppercase text-dashboard-text-label">{label}</p><p className="mt-1 font-semibold text-dashboard-text-primary">{value}</p></div>;
 }
