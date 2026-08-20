@@ -11,6 +11,7 @@ import * as salesService from '../services/salesService';
 import * as settingsService from '../services/settingsService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
+import { calculateItemDiscount, getDiscountPrice, getDiscountPriceError } from '../utils/itemDiscount';
 import {
   Alert,
   Button,
@@ -190,6 +191,10 @@ export function POS() {
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) ?? null;
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const lineDiscountTotal = cart.reduce((sum, item) => sum + item.discount_amount, 0);
+  const hasInvalidDiscountPrice = cart.some((item) => getDiscountPriceError(
+    item.unit_price,
+    getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+  ));
   const maximumCartDiscount = Math.max(subtotal - lineDiscountTotal, 0);
   const totalAfterDiscount = subtotal - lineDiscountTotal - cartDiscount;
   const cardPaymentFee = paymentMethod === 'card' ? salesService.calculateCardPaymentFee(totalAfterDiscount) : 0;
@@ -330,7 +335,18 @@ export function POS() {
       if (existingItem) {
         return currentCart.map((item) =>
           item.variant_id === variant.id
-            ? { ...item, quantity: item.quantity + requested }
+            ? {
+              ...item,
+              quantity: item.quantity + requested,
+              discount_amount: getDiscountPriceError(
+                item.unit_price,
+                getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+              ) ? 0 : calculateItemDiscount(
+                item.unit_price,
+                getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+                item.quantity + requested,
+              ).lineDiscount,
+            }
             : item
         );
       }
@@ -341,6 +357,7 @@ export function POS() {
           variant_id: variant.id,
           quantity: requested,
           unit_price: Number(variant.selling_price),
+          discount_price: Number(variant.selling_price),
           cost_price: Number(variant.cost_price),
           discount_amount: 0,
           product_name: variant.product.name,
@@ -404,22 +421,40 @@ export function POS() {
     setCart((currentCart) =>
       currentCart.map((item) => {
         if (item.variant_id === variantId) {
+          const discountPrice = getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity);
+          const updatedDiscount = getDiscountPriceError(item.unit_price, discountPrice)
+            ? 0
+            : calculateItemDiscount(item.unit_price, discountPrice, quantity).lineDiscount;
           if (item.is_instant_sale) {
-            return { ...item, quantity };
+            return { ...item, quantity, discount_price: discountPrice, discount_amount: updatedDiscount };
           }
           const stock = variants.find((variant) => variant.id === variantId)?.stock_quantity ?? 0;
-          return { ...item, quantity: Math.min(quantity, stock) };
+          const nextQuantity = Math.min(quantity, stock);
+          return {
+            ...item,
+            quantity: nextQuantity,
+            discount_price: discountPrice,
+            discount_amount: getDiscountPriceError(item.unit_price, discountPrice)
+              ? 0
+              : calculateItemDiscount(item.unit_price, discountPrice, nextQuantity).lineDiscount,
+          };
         }
         return item;
       })
     );
   };
 
-  const updateItemDiscount = (variantId: string, discountAmount: number) => {
+  const updateDiscountPrice = (variantId: string, discountPrice: number) => {
     setCart((currentCart) =>
       currentCart.map((item) =>
         item.variant_id === variantId
-          ? { ...item, discount_amount: Math.min(Math.max(discountAmount, 0), item.unit_price * item.quantity) }
+          ? {
+            ...item,
+            discount_price: discountPrice,
+            discount_amount: getDiscountPriceError(item.unit_price, discountPrice)
+              ? 0
+              : calculateItemDiscount(item.unit_price, discountPrice, item.quantity).lineDiscount,
+          }
           : item
       )
     );
@@ -438,14 +473,21 @@ export function POS() {
   }, [focusBarcodeInput]);
 
   const handleInstantBillingSubmit = (values: InstantBillingFormValues) => {
+    const quantity = Number(values.quantity);
+    const unitPrice = Number(values.selling_price);
+    const lineDiscount = Number(values.discount || 0);
+    const discountPrice = getDiscountPrice(unitPrice, undefined, lineDiscount, quantity);
     setCart((currentCart) => [
       ...currentCart,
       {
         variant_id: `instant-${Date.now()}`,
-        quantity: Number(values.quantity),
+        quantity,
         cost_price: Number(values.cost_price),
-        unit_price: Number(values.selling_price),
-        discount_amount: Number(values.discount || 0),
+        unit_price: unitPrice,
+        discount_price: discountPrice,
+        discount_amount: getDiscountPriceError(unitPrice, discountPrice)
+          ? 0
+          : calculateItemDiscount(unitPrice, discountPrice, quantity).lineDiscount,
         product_name: values.product_name,
         size: '-',
         color: '-',
@@ -484,7 +526,16 @@ export function POS() {
   };
 
   const handleResumeHeldSale = (heldSale: HeldSaleWithCustomer) => {
-    setCart(heldSale.cart_data);
+    setCart(heldSale.cart_data.map((item) => {
+      const discountPrice = getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity);
+      return {
+        ...item,
+        discount_price: discountPrice,
+        discount_amount: getDiscountPriceError(item.unit_price, discountPrice)
+          ? 0
+          : calculateItemDiscount(item.unit_price, discountPrice, item.quantity).lineDiscount,
+      };
+    }));
     setCartDiscount(Number(heldSale.discount_amount ?? 0));
     setPaymentMethod((heldSale.payment_method as 'cash' | 'card' | 'bank_transfer' | 'credit') ?? 'cash');
     setSelectedCustomerId(heldSale.customer_id || 'walk-in');
@@ -522,6 +573,11 @@ export function POS() {
 
     if (cartDiscount < 0 || cartDiscount > maximumCartDiscount || grandTotal < 0) {
       setError('The overall discount cannot exceed the sale amount.');
+      return;
+    }
+
+    if (hasInvalidDiscountPrice) {
+      setError('Fix invalid item discount prices before completing the sale.');
       return;
     }
 
@@ -605,7 +661,7 @@ export function POS() {
       setIsCompletingSale(false);
       focusBarcodeInput();
     }
-  }, [activeHeldSaleId, amountReceived, autoPrintAfterSale, broadcastCustomerDisplay, cart, cartDiscount, changeDue, clearCart, focusBarcodeInput, grandTotal, maximumCartDiscount, paymentMethod, printCompletedSale, saleNotes, selectedCustomerId, storeSettings?.store_name]);
+  }, [activeHeldSaleId, amountReceived, autoPrintAfterSale, broadcastCustomerDisplay, cart, cartDiscount, changeDue, clearCart, focusBarcodeInput, grandTotal, hasInvalidDiscountPrice, maximumCartDiscount, paymentMethod, printCompletedSale, saleNotes, selectedCustomerId, storeSettings?.store_name]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -808,7 +864,7 @@ export function POS() {
                       <th className="min-w-0 px-1.5 py-2.5 font-semibold">Variant</th>
                       <th className="min-w-0 px-1 py-2.5 text-center font-semibold">Qty</th>
                       <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Price</th>
-                      <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Discount</th>
+                      <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Disc. Price</th>
                       <th className="min-w-0 px-1.5 py-2.5 text-right font-semibold">Total</th>
                       <th className="min-w-0 px-1 py-2.5 text-center text-[9px] font-semibold">Action</th>
                     </tr>
@@ -846,15 +902,38 @@ export function POS() {
                         </td>
                         <td className="min-w-0 px-1.5 py-2">
                           <Input
-                            aria-label={`Discount for ${item.product_name}`}
-                            className="min-h-7 w-full min-w-0 px-1.5 py-1 text-right text-xs tabular-nums"
+                            aria-label={`Discount price for ${item.product_name}`}
+                            aria-invalid={Boolean(getDiscountPriceError(
+                              item.unit_price,
+                              getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+                            ))}
+                            className={`min-h-7 w-full min-w-0 px-1.5 py-1 text-right text-xs tabular-nums ${getDiscountPriceError(
+                              item.unit_price,
+                              getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+                            ) ? 'border-red-400 text-red-200' : ''}`}
                             type="number"
                             min="0"
-                            max={item.unit_price * item.quantity}
+                            max={item.unit_price}
                             step="0.01"
-                            value={item.discount_amount}
-                            onChange={(event) => updateItemDiscount(item.variant_id, Number(event.target.value))}
+                            value={getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity)}
+                            onFocus={(event) => event.currentTarget.select()}
+                            onChange={(event) => updateDiscountPrice(item.variant_id, Number(event.target.value))}
                           />
+                          {getDiscountPriceError(
+                            item.unit_price,
+                            getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+                          ) ? (
+                            <p className="mt-1 text-right text-[9px] leading-tight text-red-300">
+                              {getDiscountPriceError(
+                                item.unit_price,
+                                getDiscountPrice(item.unit_price, item.discount_price, item.discount_amount, item.quantity),
+                              )}
+                            </p>
+                          ) : item.discount_amount > 0 ? (
+                            <p className="mt-1 text-right text-[9px] leading-tight text-dashboard-accent">
+                              -{formatCurrency(item.discount_amount).replace('LKR', '').trim()}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="min-w-0 truncate px-1.5 py-2.5 text-right font-semibold tabular-nums text-dashboard-text-primary" title={formatCurrency(item.unit_price * item.quantity - item.discount_amount)}>
                           {formatCurrency(item.unit_price * item.quantity - item.discount_amount).replace('LKR', '').trim()}
@@ -959,10 +1038,18 @@ export function POS() {
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex items-center justify-between text-dashboard-text-sub">
-                  <span>Discount</span>
-                  <span>{formatCurrency(lineDiscountTotal + cartDiscount)}</span>
-                </div>
+                {lineDiscountTotal > 0 && (
+                  <div className="flex items-center justify-between text-dashboard-text-sub">
+                    <span>Item Discount</span>
+                    <span>-{formatCurrency(lineDiscountTotal)}</span>
+                  </div>
+                )}
+                {cartDiscount > 0 && (
+                  <div className="flex items-center justify-between text-dashboard-text-sub">
+                    <span>Sale Discount</span>
+                    <span>-{formatCurrency(cartDiscount)}</span>
+                  </div>
+                )}
                 {paymentMethod === 'card' && (
                   <div className="flex items-center justify-between text-dashboard-text-sub">
                     <span>Card Fee (2.75%)</span>
@@ -987,7 +1074,7 @@ export function POS() {
                 )}
               </div>
 
-              <Button className="pos-complete-sale min-h-11 w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0 || isCompletingSale}>
+              <Button className="pos-complete-sale min-h-11 w-full" onClick={() => void handleCompleteSale()} disabled={cart.length === 0 || isCompletingSale || hasInvalidDiscountPrice}>
                 <CreditCard size={16} />
                 {isCompletingSale ? 'Completing Sale…' : 'Complete Sale'}
               </Button>
@@ -997,7 +1084,7 @@ export function POS() {
       </div>
 
       {mobilePosTab === 'cart' && <div className="pos-mobile-checkout fixed inset-x-0 bottom-0 z-30 border-t border-white/15 bg-[#061711]/95 p-3 shadow-2xl backdrop-blur">
-        <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="text-xs text-dashboard-text-sub">Grand Total</p><p className="truncate text-lg font-bold text-dashboard-text-primary">{formatCurrency(grandTotal)}</p></div><Button className="min-h-12 flex-1" onClick={() => void handleCompleteSale()} disabled={!cart.length || isCompletingSale}><CreditCard size={17}/>{isCompletingSale ? 'Completing…' : 'Complete Sale'}</Button></div>
+        <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="text-xs text-dashboard-text-sub">Grand Total</p><p className="truncate text-lg font-bold text-dashboard-text-primary">{formatCurrency(grandTotal)}</p></div><Button className="min-h-12 flex-1" onClick={() => void handleCompleteSale()} disabled={!cart.length || isCompletingSale || hasInvalidDiscountPrice}><CreditCard size={17}/>{isCompletingSale ? 'Completing…' : 'Complete Sale'}</Button></div>
       </div>}
 
       {selectedProduct && (

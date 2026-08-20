@@ -98,6 +98,7 @@ export interface Sale {
   invoice_number: string | null;
   subtotal: number;
   discount_amount: number;
+  invoice_discount_amount?: number;
   tax_amount: number;
   card_payment_fee: number;
   total_amount: number;
@@ -120,6 +121,7 @@ export interface SaleItem {
   cost_price: number | null;
   cost_price_at_sale: number | null;
   discount_amount: number;
+  line_subtotal?: number;
   line_total: number;
   product_name_snapshot: string | null;
   size_snapshot: string | null;

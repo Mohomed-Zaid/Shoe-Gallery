@@ -10,11 +10,13 @@ import type {
   StoreSettings,
   Profile,
 } from '../types';
+import { calculateItemDiscount, getDiscountPrice, getDiscountPriceError } from '../utils/itemDiscount';
 
 export interface CartItem {
   variant_id: string;
   quantity: number;
   unit_price: number;
+  discount_price?: number;
   cost_price?: number;
   discount_amount: number;
   product_name: string;
@@ -120,6 +122,19 @@ export async function createSale(payload: CreateSalePayload) {
     throw new Error('Please add at least one item to complete the sale.');
   }
 
+  const pricedItems = payload.items.map((item) => {
+    const discountPrice = getDiscountPrice(
+      Number(item.unit_price),
+      item.discount_price,
+      Number(item.discount_amount),
+      Number(item.quantity),
+    );
+    const validationError = getDiscountPriceError(Number(item.unit_price), discountPrice);
+    if (validationError) throw new Error(validationError);
+    const pricing = calculateItemDiscount(Number(item.unit_price), discountPrice, Number(item.quantity));
+    return { ...item, discount_price: discountPrice, discount_amount: pricing.lineDiscount };
+  });
+
   const inventoryItems = payload.items.filter((item) => !item.is_instant_sale);
   const requiredByVariant = inventoryItems.reduce<Record<string, number>>((result, item) => {
     result[item.variant_id] = (result[item.variant_id] ?? 0) + item.quantity;
@@ -146,8 +161,8 @@ export async function createSale(payload: CreateSalePayload) {
     if (Number(variant.stock_quantity) < required) throw new Error(`Stock changed: only ${Number(variant.stock_quantity)} item(s) are now available.`);
   }
 
-  const subtotal = payload.items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-  const itemDiscount = payload.items.reduce((sum, item) => sum + item.discount_amount, 0);
+  const subtotal = pricedItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+  const itemDiscount = pricedItems.reduce((sum, item) => sum + item.discount_amount, 0);
   const discountAmount = (payload.discount_amount ?? 0) + itemDiscount;
   const amountAfterDiscount = subtotal - discountAmount;
   const cardPaymentFee = payload.payment_method === 'card' ? calculateCardPaymentFee(amountAfterDiscount) : 0;
@@ -198,7 +213,7 @@ export async function createSale(payload: CreateSalePayload) {
     throw saleError ?? new Error('Failed to create sale.');
   }
 
-  const saleItems = payload.items.map((item) => {
+  const saleItems = pricedItems.map((item) => {
     const currentVariant = item.is_instant_sale ? null : currentVariants.find((variant) => variant.id === item.variant_id);
     const saleTimeCost = item.is_instant_sale
       ? (item.cost_price == null ? null : Number(item.cost_price))
@@ -213,7 +228,7 @@ export async function createSale(payload: CreateSalePayload) {
     cost_price_at_sale: saleTimeCost,
     line_subtotal: item.unit_price * item.quantity,
     discount_amount: item.discount_amount,
-    line_total: item.unit_price * item.quantity - item.discount_amount,
+    line_total: calculateItemDiscount(item.unit_price, item.discount_price, item.quantity).lineTotal,
     product_name_snapshot: item.is_instant_sale ? `${item.product_name} (Instant Sale)` : item.product_name,
     item_number_snapshot: item.item_number ?? null,
     barcode_number_snapshot: item.barcode_number ?? null,
