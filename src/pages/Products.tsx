@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Eye } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { Product, Category, Brand } from '../types';
@@ -7,7 +7,8 @@ import * as productService from '../services/productService';
 import * as categoryService from '../services/categoryService';
 import * as brandService from '../services/brandService';
 import { getErrorMessage } from '../utils/errors';
-import { formatDate } from '../utils/format';
+import { formatCurrency, formatDate } from '../utils/format';
+import { calculateCompanyCost } from '../utils/companyPricing';
 import {
   Alert,
   Button,
@@ -26,9 +27,14 @@ interface ProductFormInputs {
   category_id: string;
   brand_id: string;
   description: string;
+  selling_price?: number;
+  company_percentage?: number;
 }
 
+type ProductFormMode = 'normal' | 'company';
+
 export function Products() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -36,7 +42,11 @@ export function Products() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ProductFormInputs>();
+  const [formMode, setFormMode] = useState<ProductFormMode>('normal');
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<ProductFormInputs>();
+  const sellingPrice = Number(watch('selling_price'));
+  const companyPercentage = Number(watch('company_percentage'));
+  const calculatedCost = calculateCompanyCost(sellingPrice, companyPercentage);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -67,6 +77,13 @@ export function Products() {
     reset();
   };
 
+  const openCreateModal = (mode: ProductFormMode) => {
+    setEditingId(null);
+    setFormMode(mode);
+    reset(mode === 'company' ? { company_percentage: 0 } : undefined);
+    setShowModal(true);
+  };
+
   const onSubmit = async (data: ProductFormInputs) => {
     setError(null);
 
@@ -81,15 +98,25 @@ export function Products() {
         brand_id: data.brand_id || null,
         description: data.description || null,
         image_url: null,
+        ...(formMode === 'company' ? {
+          product_type: 'company' as const,
+          company_selling_price: Number(data.selling_price),
+          company_percentage: Number(data.company_percentage),
+        } : {}),
       };
 
       if (editingId) {
         const { error: updateError } = await productService.updateProduct(editingId, payload);
         if (updateError) throw updateError;
       } else {
-        const { error: createError } = await productService.createProduct(payload);
+        const { data: createdProduct, error: createError } = await productService.createProduct(payload);
         if (createError) {
           setError(getErrorMessage(createError, 'Unable to create product'));
+          return;
+        }
+        if (formMode === 'company' && createdProduct) {
+          closeModal();
+          navigate(`/products/${createdProduct.id}`);
           return;
         }
       }
@@ -102,13 +129,17 @@ export function Products() {
   };
 
   const handleEdit = (product: Product) => {
+    const mode = product.product_type === 'company' ? 'company' : 'normal';
     setEditingId(product.id);
+    setFormMode(mode);
     reset({
       item_article: product.item_article || product.item_number || product.code,
       name: product.name,
       category_id: product.category_id || '',
       brand_id: product.brand_id || '',
       description: product.description || '',
+      selling_price: product.company_selling_price ?? undefined,
+      company_percentage: product.company_percentage ?? undefined,
     });
     setShowModal(true);
   };
@@ -129,10 +160,16 @@ export function Products() {
         title="Products"
         description="Manage your shoe inventory"
         action={
-          <Button onClick={() => { setEditingId(null); reset(); setShowModal(true); }}>
-            <Plus size={20} />
-            Add Product
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => openCreateModal('company')}>
+              <Plus size={20} />
+              Company Product
+            </Button>
+            <Button onClick={() => openCreateModal('normal')}>
+              <Plus size={20} />
+              Add Product
+            </Button>
+          </>
         }
       />
 
@@ -160,7 +197,7 @@ export function Products() {
               </td>
               <td className="whitespace-nowrap px-6 py-4">
                 <div>
-                  <div className="text-sm font-medium text-dashboard-text-primary">{product.name}</div>
+                  <div className="text-sm font-medium text-dashboard-text-primary">{product.name} <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase text-dashboard-text-sub">{product.product_type === 'company' ? 'Company' : 'Normal'}</span></div>
                   <div className="text-sm text-dashboard-text-sub">{product.description || '-'}</div>
                 </div>
               </td>
@@ -188,7 +225,7 @@ export function Products() {
       )}
 
       {showModal && (
-        <Modal title={editingId ? 'Edit Product' : 'Add Product'} onClose={closeModal} size="lg">
+        <Modal title={editingId ? (formMode === 'company' ? 'Edit Company Product' : 'Edit Product') : (formMode === 'company' ? 'Add Company Product' : 'Add Product')} onClose={closeModal} size="lg">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input id="name" label="Name" error={errors.name?.message} {...register('name', { required: 'Name is required' })} />
             <Input
@@ -214,6 +251,49 @@ export function Products() {
               ))}
             </Select>
             <Textarea id="description" label="Description" rows={3} {...register('description')} />
+
+            {formMode === 'company' && (
+              <div className="grid gap-4 rounded-xl border border-dashboard-accent/25 bg-dashboard-accent/5 p-4 sm:grid-cols-2">
+                <Input
+                  id="selling_price"
+                  label="Selling Price"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  error={errors.selling_price?.message}
+                  {...register('selling_price', {
+                    required: 'Selling price is required',
+                    valueAsNumber: true,
+                    min: { value: 0.01, message: 'Selling price must be greater than zero' },
+                  })}
+                />
+                <Input
+                  id="company_percentage"
+                  label="Company Percentage (%)"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  error={errors.company_percentage?.message}
+                  {...register('company_percentage', {
+                    required: 'Company percentage is required',
+                    valueAsNumber: true,
+                    min: { value: 0, message: 'Percentage cannot be less than 0' },
+                    max: { value: 100, message: 'Percentage cannot exceed 100' },
+                  })}
+                />
+                <Input
+                  id="calculated_cost_price"
+                  label="Calculated Cost Price"
+                  value={formatCurrency(calculatedCost)}
+                  readOnly
+                  className="cursor-not-allowed bg-white/[.03] font-semibold"
+                />
+                <p className="self-end pb-2 text-xs text-dashboard-text-sub">
+                  Cost is calculated automatically from selling price minus the company percentage.
+                </p>
+              </div>
+            )}
 
             <div className="flex gap-3 pt-4">
               <Button type="button" variant="secondary" className="flex-1" onClick={closeModal}>Cancel</Button>

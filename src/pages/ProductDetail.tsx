@@ -15,6 +15,7 @@ import {
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency, formatDate } from '../utils/format';
 import { compareProductVariants } from '../utils/variantSorting';
+import { calculateCompanyCost } from '../utils/companyPricing';
 import {
   Alert,
   Button,
@@ -34,6 +35,7 @@ interface VariantFormInputs {
   color: string;
   cost_price: number;
   selling_price: number;
+  company_percentage?: number;
   stock_quantity: number;
 }
 
@@ -63,8 +65,12 @@ export function ProductDetail() {
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
   const [bulkPrinting, setBulkPrinting] = useState(false);
   const [bulkPrintError, setBulkPrintError] = useState<string | null>(null);
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<VariantFormInputs>();
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<VariantFormInputs>();
   const sortedVariants = useMemo(() => [...variants].sort(compareProductVariants), [variants]);
+  const isCompanyProduct = product?.product_type === 'company';
+  const watchedSellingPrice = Number(watch('selling_price'));
+  const watchedCompanyPercentage = Number(watch('company_percentage'));
+  const calculatedCompanyCost = calculateCompanyCost(watchedSellingPrice, watchedCompanyPercentage);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -130,15 +136,34 @@ export function ProductDetail() {
     reset();
   };
 
+  const openNewVariantModal = () => {
+    setEditingVariantId(null);
+    reset(isCompanyProduct ? {
+      selling_price: product?.company_selling_price ?? undefined,
+      company_percentage: product?.company_percentage ?? undefined,
+      stock_quantity: 0,
+    } : undefined);
+    setShowModal(true);
+  };
+
   const onSubmit = async (data: VariantFormInputs) => {
     if (!id) return;
     setError(null);
 
+    const sellingPrice = Number(data.selling_price);
+    const percentage = Number(data.company_percentage);
+    const usesDefaultPercentage = isCompanyProduct
+      && percentage === Number(product?.company_percentage);
     const variantValues = {
       size: data.size,
       color: data.color,
-      cost_price: Number(data.cost_price),
-      selling_price: Number(data.selling_price),
+      cost_price: isCompanyProduct
+        ? calculateCompanyCost(sellingPrice, percentage)
+        : Number(data.cost_price),
+      selling_price: sellingPrice,
+      ...(isCompanyProduct ? {
+        company_percentage: usesDefaultPercentage ? null : percentage,
+      } : {}),
       stock_quantity: Number(data.stock_quantity),
     };
 
@@ -162,6 +187,7 @@ export function ProductDetail() {
       color: variant.color,
       cost_price: variant.cost_price ?? undefined,
       selling_price: variant.selling_price ?? undefined,
+      company_percentage: variant.company_percentage ?? product?.company_percentage ?? undefined,
       stock_quantity: variant.stock_quantity,
     });
     setShowModal(true);
@@ -302,6 +328,16 @@ export function ProductDetail() {
               <dd className="font-medium text-dashboard-text-primary">{brand?.name || '-'}</dd>
             </div>
             <div className="flex justify-between">
+              <dt className="text-dashboard-text-label">Product Type</dt>
+              <dd className="font-medium text-dashboard-text-primary">{isCompanyProduct ? 'Company Product' : 'Normal Product'}</dd>
+            </div>
+            {isCompanyProduct && (
+              <div className="flex justify-between">
+                <dt className="text-dashboard-text-label">Company Percentage</dt>
+                <dd className="font-medium text-dashboard-text-primary">{product.company_percentage}%</dd>
+              </div>
+            )}
+            <div className="flex justify-between">
               <dt className="text-dashboard-text-label">Created</dt>
               <dd className="font-medium text-dashboard-text-primary">{formatDate(product.created_at)}</dd>
             </div>
@@ -320,7 +356,7 @@ export function ProductDetail() {
                 <Printer size={18} />
                 Print All Barcodes
               </Button>
-              <Button onClick={() => { setEditingVariantId(null); reset(); setShowModal(true); }}>
+              <Button onClick={openNewVariantModal}>
                 <Plus size={18} />
                 Add Variant
               </Button>
@@ -393,8 +429,50 @@ export function ProductDetail() {
             </div>
             <Input id="size" label="Size" error={errors.size?.message} {...register('size', { required: 'Size is required' })} />
             <Input id="color" label="Color" error={errors.color?.message} {...register('color', { required: 'Color is required' })} />
-            <Input id="cost_price" label="Cost Price" type="number" step="0.01" error={errors.cost_price?.message} {...register('cost_price', { required: 'Required', valueAsNumber: true })} />
-            <Input id="selling_price" label="Selling Price" type="number" step="0.01" error={errors.selling_price?.message} {...register('selling_price', { required: 'Required', valueAsNumber: true })} />
+            {isCompanyProduct ? (
+              <>
+                <Input
+                  id="selling_price"
+                  label="Selling Price"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  error={errors.selling_price?.message}
+                  {...register('selling_price', {
+                    required: 'Selling price is required',
+                    valueAsNumber: true,
+                    min: { value: 0.01, message: 'Selling price must be greater than zero' },
+                  })}
+                />
+                <Input
+                  id="company_percentage"
+                  label="Company Percentage (%)"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  error={errors.company_percentage?.message}
+                  {...register('company_percentage', {
+                    required: 'Company percentage is required',
+                    valueAsNumber: true,
+                    min: { value: 0, message: 'Percentage cannot be less than 0' },
+                    max: { value: 100, message: 'Percentage cannot exceed 100' },
+                  })}
+                />
+                <Input
+                  id="calculated_cost_price"
+                  label="Calculated Cost Price"
+                  value={formatCurrency(calculatedCompanyCost)}
+                  readOnly
+                  className="cursor-not-allowed bg-white/[.03] font-semibold"
+                />
+              </>
+            ) : (
+              <>
+                <Input id="cost_price" label="Cost Price" type="number" step="0.01" error={errors.cost_price?.message} {...register('cost_price', { required: 'Required', valueAsNumber: true })} />
+                <Input id="selling_price" label="Selling Price" type="number" step="0.01" error={errors.selling_price?.message} {...register('selling_price', { required: 'Required', valueAsNumber: true })} />
+              </>
+            )}
             <Input id="stock_quantity" label="Stock Quantity" type="number" error={errors.stock_quantity?.message} {...register('stock_quantity', { required: 'Required', valueAsNumber: true })} />
             <div className="flex gap-3 pt-4">
               <Button type="button" variant="secondary" className="flex-1" onClick={closeModal}>Cancel</Button>

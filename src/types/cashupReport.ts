@@ -10,5 +10,6 @@ export interface CashupSale{id:string;invoice_number:string;created_at:string;cu
 export interface CashupRefund{id:string;return_number:string;invoice:string;date:string;method:string;amount:number;processed_by:string}
 export interface CashupExpense{id:string;date:string;description:string;amount:number;user:string}
 export interface CashupDeposit{id:string;date:string;bank:string;reference:string|null;amount:number;recorded_by:string;notes:string|null}
+export interface BankDepositReportRow extends CashupDeposit{cashup:string;cashier:string;cashier_id:string}
 export interface CashupDetail{session:CashupRow;sales:CashupSale[];refunds:CashupRefund[];expenses:CashupExpense[];deposits:CashupDeposit[]}
 export interface CashupExportData extends CashupResult{details:CashupDetail[];generatedAt:string}

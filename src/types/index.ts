@@ -32,6 +32,9 @@ export interface Product {
   brand_id: string | null;
   description: string | null;
   image_url: string | null;
+  product_type?: 'normal' | 'company';
+  company_percentage?: number | null;
+  company_selling_price?: number | null;
   base_cost_price?: number | null;
   base_selling_price?: number | null;
   created_at: string;
@@ -44,6 +47,7 @@ export interface ProductVariant {
   color: string;
   cost_price: number | null;
   selling_price: number | null;
+  company_percentage?: number | null;
   stock_quantity: number;
   barcode_number: string | null;
   is_active?: boolean;

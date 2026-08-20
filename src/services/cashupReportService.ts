@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { CashierCashup,CashupDeposit,CashupDetail,CashupExportData,CashupFilters,CashupOptions,CashupPageSize,CashupResult,CashupRow,CashupSort,DailyCashup } from '../types/cashupReport';
+import type { BankDepositReportRow,CashierCashup,CashupDeposit,CashupDetail,CashupExportData,CashupFilters,CashupOptions,CashupPageSize,CashupResult,CashupRow,CashupSort,DailyCashup } from '../types/cashupReport';
 import { validateCashupRows } from '../utils/cashupValidation';
 const n=(v:unknown)=>Number(v??0),nn=(v:unknown)=>v==null?null:Number(v);
 
@@ -13,6 +13,7 @@ function normalize(v:unknown):CashupResult{
 }
 export async function getCashupReport(f:CashupFilters,page=1,size:CashupPageSize=25,sort:CashupSort='newest'){if(f.startDate&&f.endDate&&f.startDate>f.endDate)throw new Error('From date cannot be after To date.');const{data,error}=await supabase.rpc('get_cashup_report',{p_start_date:f.startDate||null,p_end_date:f.endDate||null,p_search:f.search.trim()||null,p_cashier_id:f.cashierId||null,p_status:f.status||null,p_page:page,p_page_size:size,p_sort:sort});if(error)throw error;return normalize(data)}
 export async function getCashupOptions():Promise<CashupOptions>{const{data,error}=await supabase.from('profiles').select('id,full_name,email').order('full_name');if(error)throw error;return{cashiers:(data??[]).map(x=>({id:x.id,name:x.full_name||x.email||'Cashier'}))}}
+export async function getBankDepositReport():Promise<BankDepositReportRow[]>{const{data,error}=await supabase.from('cash_register_movements').select('id,created_at,bank_name,reference,amount,notes,created_by,recorder:profiles!cash_register_movements_created_by_fkey(full_name,email),session:cash_register_sessions!cash_register_movements_cash_register_id_fkey(id,user_id,cashier:profiles(full_name,email))').eq('movement_type','bank_deposit').order('created_at',{ascending:false}).limit(5000);if(error)throw error;return(data??[]).map((x:any)=>({id:x.id,date:x.created_at,bank:x.bank_name,reference:x.reference,amount:n(x.amount),recorded_by:x.recorder?.full_name||x.recorder?.email||'Cashier',notes:x.notes,cashup:`CS-${String(x.session?.id||'').replaceAll('-','').slice(0,8).toUpperCase()}`,cashier:x.session?.cashier?.full_name||x.session?.cashier?.email||'Cashier',cashier_id:x.session?.user_id||x.created_by}))}
 
 export async function getCashupDetail(session:CashupRow):Promise<CashupDetail>{
  const end=session.closing_time||new Date().toISOString();
