@@ -1,106 +1,52 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Banknote, Download, FileSpreadsheet, LockKeyhole, Plus, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Banknote, Download, FileSpreadsheet, Landmark, LockKeyhole, Plus, RefreshCw } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Alert, Button, DataTable, Input, LoadingSpinner, Modal, PageHeader, Pagination, Select, Textarea } from '../components/ui';
-import { addCashExpense, closeRegister, getCurrentRegister, getRegisterSessions, getRegisterSummary, openRegister } from '../services/cashRegisterService';
-import type { CashRegisterSession, CashRegisterSummary } from '../types/cashRegister';
+import { addCashExpense, closeRegister, getCurrentRegister, getRegisterSessions, getRegisterSummary, getSessionBankDeposits, openRegister, recordBankDeposit } from '../services/cashRegisterService';
+import type { BankDeposit, CashRegisterSession, CashRegisterSummary } from '../types/cashRegister';
 import { formatCurrency, formatDateTime } from '../utils/format';
 import { getErrorMessage } from '../utils/errors';
 import { downloadBlob } from '../services/salesReportService';
-const EXPENSE_TYPES = ['Shop Supplies', 'Utilities', 'Transport / Delivery', 'Repairs & Maintenance', 'Staff Expense', 'Rent', 'Refreshments', 'Other'] as const;
+
+const EXPENSE_TYPES = ['Shop Supplies','Utilities','Transport / Delivery','Repairs & Maintenance','Staff Expense','Rent','Refreshments','Other'] as const;
+
+function RegisterView({state:s,actions:a}:{state:any;actions:any}){return <div className='space-y-6'><PageHeader title='Cash Register' description='Open cash, live drawer position, expenses, deposits, cash up and shift history.' action={<Button variant='secondary' onClick={()=>void a.load()}><RefreshCw size={16}/>Refresh</Button>}/>{s.error&&<Alert message={s.error}/>} {s.loading?<LoadingSpinner/>:<><RegisterCard s={s} a={a}/><DepositHistory rows={s.deposits}/><History s={s} a={a}/></>}<Dialogs s={s} a={a}/></div>}
+
+function RegisterCard({s,a}:{s:any;a:any}){const c=s.current;return <section className={`glass-card p-5 ${c?'border-emerald-400/25':'border-amber-400/25'}`}><div className='relative z-10'><div className='flex flex-wrap items-start justify-between gap-4'><div><p className='text-xs uppercase tracking-wider text-dashboard-text-label'>Register status</p><h2 className={`mt-1 text-2xl font-bold ${c?'text-emerald-300':'text-amber-300'}`}>{c?'OPEN':'CLOSED'}</h2>{c&&<p className='mt-1 text-sm text-dashboard-text-sub'>Opened {formatDateTime(c.opening_time)} by {c.cashier_name}</p>}</div><RegisterButtons c={c} a={a}/></div>{c&&<Metrics c={c}/>}</div></section>}
+function RegisterButtons({c,a}:{c:any;a:any}){return <div className='flex flex-wrap gap-2'>{!c?<Button onClick={()=>a.setOpening(true)}><LockKeyhole size={16}/>Open Register</Button>:<><Button variant='secondary' onClick={()=>{a.setAmount(0);a.setDeposit(true)}}><Landmark size={16}/>Bank Deposit</Button><Button variant='secondary' onClick={()=>{a.setAmount(0);a.setExpense(true)}}><Plus size={16}/>Cash Expense</Button><Button variant='danger' onClick={()=>{a.setActual(Number(c.expected_cash_live));a.setClosing(true)}}><Banknote size={16}/>Cash Up & Close</Button></>}</div>}
+function Metrics({c}:{c:any}){return <div className='mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8'><Metric l='Opening' v={c.opening_balance}/><Metric l='Cash Sales' v={c.cash_sales}/><Metric l='Card Sales' v={c.card_sales}/><Metric l='Bank Sales' v={c.bank_sales}/><Metric l='Cash Refunds' v={-c.cash_refunds}/><Metric l='Expenses' v={-c.cash_expenses}/><Metric l='Bank Deposits' v={-c.bank_deposits}/><Metric l='Expected Cash' v={c.expected_cash_live} strong/></div>}
+
+function DepositHistory({rows}:{rows:BankDeposit[]}){return rows.length?<section><h2 className='mb-3 font-semibold'>Bank Deposits</h2><DataTable columns={['Time','Bank','Reference','Amount','Recorded By'].map((header,key)=>({key:String(key),header}))}>{rows.map(v=><tr key={v.id}><Cell>{formatDateTime(v.created_at)}</Cell><Cell>{v.bank_name}</Cell><Cell>{v.reference||'—'}</Cell><Cell>{formatCurrency(-v.amount)}</Cell><Cell>{v.recorded_by}</Cell></tr>)}</DataTable></section>:null}
+function History({s,a}:{s:any;a:any}){return <section><h2 className='mb-3 font-semibold'>Register History</h2><DataTable columns={['Cashier','Open Time','Close Time','Opening','Expected','Actual','Difference','Status','Cash Up Report'].map((header,key)=>({key:String(key),header}))} isEmpty={!s.rows.length}>{s.rows.map((x:CashRegisterSession)=><tr key={x.id}><Cell>{x.cashier?.full_name||x.cashier?.email||'Cashier'}</Cell><Cell>{formatDateTime(x.opening_time)}</Cell><Cell>{x.closing_time?formatDateTime(x.closing_time):'—'}</Cell><Cell>{formatCurrency(Number(x.opening_balance))}</Cell><Cell>{x.expected_cash==null?'—':formatCurrency(Number(x.expected_cash))}</Cell><Cell>{x.actual_cash==null?'—':formatCurrency(Number(x.actual_cash))}</Cell><Cell>{x.difference==null?'—':formatCurrency(Number(x.difference))}</Cell><Cell>{x.status.toUpperCase()}</Cell><td className='px-4 py-3'><div className='flex gap-2'><Button size='sm' variant='secondary' onClick={()=>void a.pdf(x.id)}><Download size={14}/>PDF</Button><Button size='sm' variant='secondary' onClick={()=>void a.excel(x.id)}><FileSpreadsheet size={14}/>Excel</Button></div></td></tr>)}</DataTable><Pagination page={s.page} totalPages={Math.max(1,Math.ceil(s.count/20))} onPageChange={a.setPage}/></section>}
+
+function Dialogs({s,a}:{s:any;a:any}){return <><OpenDialog s={s} a={a}/><DepositDialog s={s} a={a}/><ExpenseDialog s={s} a={a}/><CloseDialog s={s} a={a}/></>}
+function OpenDialog({s,a}:{s:any;a:any}){return s.opening?<Modal title='Open Cash Register' onClose={()=>a.setOpening(false)}><Input label='Opening Cash Amount' type='number' min={0} step='0.01' value={s.openAmount} onChange={e=>a.setOpenAmount(Number(e.target.value))}/><div className='mt-4'><Textarea label='Notes' value={s.notes} onChange={e=>a.setNotes(e.target.value)}/></div><Button className='mt-5 w-full' onClick={()=>void a.doOpen()}>Open Register</Button></Modal>:null}
+function DepositDialog({s,a}:{s:any;a:any}){const c=s.current;return s.deposit&&c?<Modal title='Bank Deposit' onClose={()=>a.setDeposit(false)}><div className='mb-4 rounded-xl border border-white/10 p-3 text-sm'><span className='text-dashboard-text-sub'>Current Expected Cash</span><strong className='float-right'>{formatCurrency(c.expected_cash_live)}</strong></div><Input label='Deposit Amount' type='number' min={0.01} max={c.expected_cash_live} step='0.01' value={s.amount} onChange={e=>a.setAmount(Number(e.target.value))}/><div className='mt-4'><Input label='Bank' value={s.bankName} onChange={e=>a.setBankName(e.target.value)}/></div><div className='mt-4'><Input label='Reference / Deposit Slip No.' value={s.reference} onChange={e=>a.setReference(e.target.value)}/></div><div className='mt-4'><Textarea label='Notes' value={s.depositNotes} onChange={e=>a.setDepositNotes(e.target.value)}/></div><div className='mt-5 flex justify-end gap-2'><Button variant='secondary' onClick={()=>a.setDeposit(false)}>Cancel</Button><Button onClick={()=>void a.doDeposit()}>Record Deposit</Button></div></Modal>:null}
+function ExpenseDialog({s,a}:{s:any;a:any}){return s.expense?<Modal title='Record Cash Expense' onClose={()=>a.setExpense(false)}><Input label='Expense Amount' type='number' min={0.01} step='0.01' value={s.amount} onChange={e=>a.setAmount(Number(e.target.value))}/><div className='mt-4'><Select label='Expense Type' value={s.expenseType} onChange={e=>a.setExpenseType(e.target.value)}>{EXPENSE_TYPES.map(type=><option key={type} value={type}>{type}</option>)}</Select></div><div className='mt-4'><Input label='Additional Details (Optional)' value={s.description} onChange={e=>a.setDescription(e.target.value)}/></div><Button className='mt-5 w-full' onClick={()=>void a.doExpense()}>Save Expense</Button></Modal>:null}
+function CloseDialog({s,a}:{s:any;a:any}){const c=s.current;return s.closing&&c?<Modal title='Cash Up & Close Register' onClose={()=>a.setClosing(false)}><div className='mb-4 space-y-2 text-sm'><Line l='Opening Cash' v={c.opening_balance}/><Line l='Cash Sales' v={c.cash_sales}/><Line l='Cash Refunds' v={-c.cash_refunds}/><Line l='Cash Expenses' v={-c.cash_expenses}/><Line l='Bank Deposits' v={-c.bank_deposits}/><Line l='Expected Cash' v={c.expected_cash_live} strong/></div><Input label='Actual Cash Counted' type='number' min={0} step='0.01' value={s.actual} onChange={e=>a.setActual(Number(e.target.value))}/><p className={`mt-2 text-sm font-semibold ${s.actual-c.expected_cash_live===0?'text-emerald-300':'text-amber-300'}`}>Difference: {formatCurrency(s.actual-c.expected_cash_live)}</p><div className='mt-4'><Textarea label='Closing Notes' value={s.notes} onChange={e=>a.setNotes(e.target.value)}/></div><Button variant='danger' className='mt-5 w-full' onClick={()=>void a.doClose()}>Close Register</Button></Modal>:null}
+function Metric({l,v,strong=false}:{l:string;v:number;strong?:boolean}){return <div className={`rounded-xl border p-3 ${strong?'border-sky-400/30 bg-sky-400/10':'border-white/10 bg-white/[.03]'}`}><p className='text-xs text-dashboard-text-sub'>{l}</p><p className='mt-1 font-bold'>{formatCurrency(Number(v))}</p></div>}
+function Line({l,v,strong=false}:{l:string;v:number;strong?:boolean}){return <div className={`flex justify-between ${strong?'border-t border-white/10 pt-2 font-bold':''}`}><span>{l}</span><span>{formatCurrency(Number(v))}</span></div>}
+function Cell({children}:{children:ReactNode}){return <td className='whitespace-nowrap px-4 py-3 text-sm text-dashboard-text-sub'>{children}</td>}
+function workbook(sheets:Array<[string,Array<Array<string|number>>]>){const e=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;'),sheet=(n:string,rs:Array<Array<string|number>>)=>`<Worksheet ss:Name='${n}'><Table>${rs.map(r=>`<Row>${r.map(v=>`<Cell><Data ss:Type='${typeof v==='number'?'Number':'String'}'>${e(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`;return `<?xml version='1.0'?><Workbook xmlns='urn:schemas-microsoft-com:office:spreadsheet' xmlns:ss='urn:schemas-microsoft-com:office:spreadsheet'>${sheets.map(([n,r])=>sheet(n,r)).join('')}</Workbook>`}
+
 export function CashRegisterPage() {
-    const [current, setCurrent] = useState<CashRegisterSummary | null>();
-    const [rows, setRows] = useState<CashRegisterSession[]>([]);
-    const [count, setCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string>();
-    const [opening, setOpening] = useState(false);
-    const [closing, setClosing] = useState(false);
-    const [expense, setExpense] = useState(false);
-    const [openAmount, setOpenAmount] = useState(0);
-    const [actual, setActual] = useState(0);
-    const [amount, setAmount] = useState(0);
-    const [notes, setNotes] = useState('');
-    const [description, setDescription] = useState('');
-    const [expenseType, setExpenseType] = useState<(typeof EXPENSE_TYPES)[number]>('Shop Supplies');
-    const load = useCallback(async () => { setLoading(true); try {
-    const [c, h] = await Promise.all([getCurrentRegister(), getRegisterSessions(page)]);
-    setCurrent(c);
-    setRows(h.rows);
-    setCount(h.count);
-    setError(undefined);
+  const [current,setCurrent]=useState<CashRegisterSummary|null>();
+  const [deposits,setDeposits]=useState<BankDeposit[]>([]);
+  const [rows,setRows]=useState<CashRegisterSession[]>([]);
+  const [count,setCount]=useState(0),[page,setPage]=useState(1);
+  const [loading,setLoading]=useState(true),[error,setError]=useState<string>();
+  const [opening,setOpening]=useState(false),[closing,setClosing]=useState(false),[expense,setExpense]=useState(false),[deposit,setDeposit]=useState(false);
+  const [openAmount,setOpenAmount]=useState(0),[actual,setActual]=useState(0),[amount,setAmount]=useState(0);
+  const [notes,setNotes]=useState(''),[description,setDescription]=useState(''),[bankName,setBankName]=useState(''),[reference,setReference]=useState(''),[depositNotes,setDepositNotes]=useState('');
+  const [expenseType,setExpenseType]=useState<(typeof EXPENSE_TYPES)[number]>('Shop Supplies');
+  const load=useCallback(async()=>{setLoading(true);try{const[c,h]=await Promise.all([getCurrentRegister(),getRegisterSessions(page)]);setCurrent(c);setDeposits(c?await getSessionBankDeposits(c.id):[]);setRows(h.rows);setCount(h.count);setError(undefined)}catch(e){setError(getErrorMessage(e))}finally{setLoading(false)}},[page]);
+  useEffect(()=>{void load()},[load]);
+  const doOpen=async()=>{try{await openRegister(openAmount,notes);setOpening(false);setNotes('');await load()}catch(e){setError(getErrorMessage(e))}};
+  const doClose=async()=>{if(!current)return;try{await closeRegister(current.id,actual,notes);setClosing(false);setNotes('');await load()}catch(e){setError(getErrorMessage(e))}};
+  const doExpense=async()=>{if(!current)return;const d=description.trim();try{await addCashExpense(current.id,amount,d?`${expenseType} - ${d}`:expenseType);setExpense(false);setAmount(0);setExpenseType('Shop Supplies');setDescription('');await load()}catch(e){setError(getErrorMessage(e))}};
+  const doDeposit=async()=>{if(!current)return;if(amount<=0)return setError('Deposit amount must be greater than 0.');if(amount>Number(current.expected_cash_live))return setError('Bank deposit cannot exceed the current available cash balance.');if(!bankName.trim())return setError('Bank is required.');try{await recordBankDeposit(current.id,amount,bankName,reference,depositNotes);setDeposit(false);setAmount(0);setBankName('');setReference('');setDepositNotes('');await load()}catch(e){setError(getErrorMessage(e))}};
+  return <RegisterView state={{current,deposits,rows,count,page,loading,error,opening,closing,expense,deposit,openAmount,actual,amount,notes,description,bankName,reference,depositNotes,expenseType}} actions={{setPage,setOpening,setClosing,setExpense,setDeposit,setOpenAmount,setActual,setAmount,setNotes,setDescription,setBankName,setReference,setDepositNotes,setExpenseType,load,doOpen,doClose,doExpense,doDeposit,pdf,excel}}/>;
 }
-catch (e) {
-    setError(getErrorMessage(e));
-}
-finally {
-    setLoading(false);
-} }, [page]); useEffect(() => { void load(); }, [load]);
-    const doOpen = async () => { try {
-    await openRegister(openAmount, notes);
-    setOpening(false);
-    setNotes('');
-    await load();
-}
-catch (e) {
-    setError(getErrorMessage(e));
-} };
-    const doClose = async () => { if (!current)
-    return; try {
-    await closeRegister(current.id, actual, notes);
-    setClosing(false);
-    setNotes('');
-    await load();
-}
-catch (e) {
-    setError(getErrorMessage(e));
-} };
-    const doExpense = async () => {
-        if (!current)
-            return;
-        const details = description.trim();
-        const expenseDescription = details ? `${expenseType} - ${details}` : expenseType;
-        try {
-            await addCashExpense(current.id, amount, expenseDescription);
-            setExpense(false);
-            setAmount(0);
-            setExpenseType('Shop Supplies');
-            setDescription('');
-            await load();
-        }
-        catch (e) {
-            setError(getErrorMessage(e));
-        }
-    };
-    const pdf = async (id: string) => { const x = await getRegisterSummary(id);
-    const d = new jsPDF(); d.setFontSize(18); d.text('Cash Up Report', 14, 18); d.setFontSize(9); d.text(`${x.cashier_name} · ${formatDateTime(x.opening_time)} to ${x.closing_time ? formatDateTime(x.closing_time) : 'Open'}`, 14, 27); autoTable(d, { startY: 35, head: [['Metric', 'Amount']], body: [['Opening Cash', formatCurrency(Number(x.opening_balance))], ['Cash Sales', formatCurrency(Number(x.cash_sales))], ['Card Sales', formatCurrency(Number(x.card_sales))], ['Bank Sales', formatCurrency(Number(x.bank_sales))], ['Cash Refunds', formatCurrency(Number(x.cash_refunds))], ['Cash Expenses', formatCurrency(Number(x.cash_expenses))], ['Expected Cash', formatCurrency(Number(x.expected_cash ?? x.expected_cash_live))], ['Actual Cash', x.actual_cash == null ? '—' : formatCurrency(Number(x.actual_cash))], ['Difference', x.difference == null ? '—' : formatCurrency(Number(x.difference))]], theme: 'grid' }); d.save(`cash-up-${x.opening_time.slice(0, 10)}.pdf`); };
-    const excel = async (id: string) => { const x = await getRegisterSummary(id);
-    const rows = [['Cash Up Report', ''], ['Cashier', x.cashier_name], ['Open Time', x.opening_time], ['Close Time', x.closing_time || 'Open'], ['Opening Cash', x.opening_balance], ['Cash Sales', x.cash_sales], ['Card Sales', x.card_sales], ['Bank Sales', x.bank_sales], ['Cash Refunds', x.cash_refunds], ['Cash Expenses', x.cash_expenses], ['Expected Cash', x.expected_cash ?? x.expected_cash_live], ['Actual Cash', x.actual_cash ?? ''], ['Difference', x.difference ?? '']];
-    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Cash Up"><Table>${rows.map(r => `<Row>${r.map(v => `<Cell><Data ss:Type="${typeof v === 'number' ? 'Number' : 'String'}">${v}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet></Workbook>`; downloadBlob('cash-up-report.xls', xml, 'application/vnd.ms-excel'); }; return <div className="space-y-6"><PageHeader title="Cash Register" description="Open cash, live drawer position, expenses, cash up and shift history." action={<Button variant="secondary" onClick={() => void load()}><RefreshCw size={16}/>Refresh</Button>}/>{error && <Alert message={error}/>} {loading ? <LoadingSpinner /> : <><section className={`glass-card p-5 ${current ? 'border-emerald-400/25' : 'border-amber-400/25'}`}><div className="relative z-10"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-dashboard-text-label">Register status</p><h2 className={`mt-1 text-2xl font-bold ${current ? 'text-emerald-300' : 'text-amber-300'}`}>{current ? 'OPEN' : 'CLOSED'}</h2>{current && <p className="mt-1 text-sm text-dashboard-text-sub">Opened {formatDateTime(current.opening_time)} by {current.cashier_name}</p>}</div><div className="flex flex-wrap gap-2">{!current ? <Button onClick={() => setOpening(true)}><LockKeyhole size={16}/>Open Register</Button> : <><Button variant="secondary" onClick={() => setExpense(true)}><Plus size={16}/>Cash Expense</Button><Button variant="danger" onClick={() => { setActual(Number(current.expected_cash_live)); setClosing(true); }}><Banknote size={16}/>Cash Up & Close</Button></>}</div></div>{current && <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"><Metric l="Opening" v={current.opening_balance}/><Metric l="Cash Sales" v={current.cash_sales}/><Metric l="Card Sales" v={current.card_sales}/><Metric l="Bank Sales" v={current.bank_sales}/><Metric l="Cash Refunds" v={-current.cash_refunds}/><Metric l="Expenses" v={-current.cash_expenses}/><Metric l="Expected Cash" v={current.expected_cash_live} strong/></div>}</div></section><section><h2 className="mb-3 font-semibold">Register History</h2><DataTable columns={[{ key: 'cashier', header: 'Cashier' }, { key: 'open', header: 'Open Time' }, { key: 'close', header: 'Close Time' }, { key: 'opening', header: 'Opening' }, { key: 'expected', header: 'Expected' }, { key: 'actual', header: 'Actual' }, { key: 'difference', header: 'Difference' }, { key: 'status', header: 'Status' }, { key: 'actions', header: 'Cash Up Report' }]} isEmpty={!rows.length}>{rows.map(x => <tr key={x.id}><td className="px-4 py-3">{x.cashier?.full_name || x.cashier?.email || 'Cashier'}</td><td className="px-4 py-3">{formatDateTime(x.opening_time)}</td><td className="px-4 py-3">{x.closing_time ? formatDateTime(x.closing_time) : '—'}</td><td className="px-4 py-3">{formatCurrency(Number(x.opening_balance))}</td><td className="px-4 py-3">{x.expected_cash == null ? '—' : formatCurrency(Number(x.expected_cash))}</td><td className="px-4 py-3">{x.actual_cash == null ? '—' : formatCurrency(Number(x.actual_cash))}</td><td className="px-4 py-3">{x.difference == null ? '—' : formatCurrency(Number(x.difference))}</td><td className="px-4 py-3 uppercase">{x.status}</td><td className="px-4 py-3"><div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => void pdf(x.id)}><Download size={14}/>PDF</Button><Button size="sm" variant="secondary" onClick={() => void excel(x.id)}><FileSpreadsheet size={14}/>Excel</Button></div></td></tr>)}</DataTable><Pagination page={page} totalPages={Math.max(1, Math.ceil(count / 20))} onPageChange={setPage}/></section></>}{opening && <Modal title="Open Cash Register" onClose={() => setOpening(false)}><Input label="Opening Cash Amount" type="number" min={0} step="0.01" value={openAmount} onChange={e => setOpenAmount(Number(e.target.value))}/><div className="mt-4"><Textarea label="Notes" value={notes} onChange={e => setNotes(e.target.value)}/></div><Button className="mt-5 w-full" onClick={() => void doOpen()}>Open Register</Button></Modal>}
-        {expense && <Modal title="Record Cash Expense" onClose={() => setExpense(false)}>
-            <Input label="Expense Amount" type="number" min={0.01} step="0.01" value={amount} onChange={e => setAmount(Number(e.target.value))}/>
-            <div className="mt-4">
-                <Select
-                    label="Expense Type"
-                    value={expenseType}
-                    onChange={e => setExpenseType(e.target.value as (typeof EXPENSE_TYPES)[number])}
-                >
-                    {EXPENSE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                </Select>
-            </div>
-            <div className="mt-4"><Input label="Additional Details (Optional)" value={description} onChange={e => setDescription(e.target.value)}/></div>
-            <Button className="mt-5 w-full" onClick={() => void doExpense()}>Save Expense</Button>
-        </Modal>}
-        {closing && current && <Modal title="Cash Up & Close Register" onClose={() => setClosing(false)}><div className="mb-4 space-y-2 text-sm"><Line l="Opening Cash" v={current.opening_balance}/><Line l="Cash Sales" v={current.cash_sales}/><Line l="Cash Refunds" v={-current.cash_refunds}/><Line l="Cash Expenses" v={-current.cash_expenses}/><Line l="Expected Cash" v={current.expected_cash_live} strong/></div><Input label="Actual Cash Counted" type="number" min={0} step="0.01" value={actual} onChange={e => setActual(Number(e.target.value))}/><p className={`mt-2 text-sm font-semibold ${actual - current.expected_cash_live === 0 ? 'text-emerald-300' : 'text-amber-300'}`}>Difference: {formatCurrency(actual - current.expected_cash_live)}</p><div className="mt-4"><Textarea label="Closing Notes" value={notes} onChange={e => setNotes(e.target.value)}/></div><Button variant="danger" className="mt-5 w-full" onClick={() => void doClose()}>Close Register</Button></Modal>}</div>; }
-function Metric({ l, v, strong = false }: {
-    l: string;
-    v: number;
-    strong?: boolean;
-}) { return <div className={`rounded-xl border p-3 ${strong ? 'border-sky-400/30 bg-sky-400/10' : 'border-white/10 bg-white/[.03]'}`}><p className="text-xs text-dashboard-text-sub">{l}</p><p className="mt-1 font-bold">{formatCurrency(Number(v))}</p></div>; }
-function Line({ l, v, strong = false }: {
-    l: string;
-    v: number;
-    strong?: boolean;
-}) { return <div className={`flex justify-between ${strong ? 'border-t border-white/10 pt-2 font-bold' : ''}`}><span>{l}</span><span>{formatCurrency(Number(v))}</span></div>; }
+  async function excel(id:string){const[x,ds]=await Promise.all([getRegisterSummary(id),getSessionBankDeposits(id)]),summary:Array<Array<string|number>>=[['Metric','Value'],['Cashier',x.cashier_name],['Opening Cash',x.opening_balance],['Cash Sales',x.cash_sales],['Card Sales',x.card_sales],['Bank Sales',x.bank_sales],['Cash Refunds',x.cash_refunds],['Cash Expenses',x.cash_expenses],['Bank Deposits',x.bank_deposits],['Expected Cash',x.expected_cash??x.expected_cash_live],['Actual Cash',x.actual_cash??''],['Difference',x.difference??'']],dr:Array<Array<string|number>>=[['Cashup','Date','Time','Bank','Reference','Amount','Recorded By','Notes'],...ds.map(v=>[`CS-${x.id.replaceAll('-','').slice(0,8).toUpperCase()}`,new Date(v.created_at).toLocaleDateString(),new Date(v.created_at).toLocaleTimeString(),v.bank_name,v.reference||'',v.amount,v.recorded_by,v.notes||''])];downloadBlob('cash-up-report.xls',workbook([['Cash Up',summary],['Bank Deposits',dr]]),'application/vnd.ms-excel')}
+  async function pdf(id:string){const[x,ds]=await Promise.all([getRegisterSummary(id),getSessionBankDeposits(id)]),d=new jsPDF();d.setFontSize(18);d.text('Cash Up Report',14,18);autoTable(d,{startY:26,head:[['Metric','Amount']],body:[['Opening Cash',formatCurrency(Number(x.opening_balance))],['Cash Sales',formatCurrency(Number(x.cash_sales))],['Card Sales',formatCurrency(Number(x.card_sales))],['Bank Sales',formatCurrency(Number(x.bank_sales))],['Cash Refunds',formatCurrency(Number(x.cash_refunds))],['Cash Expenses',formatCurrency(Number(x.cash_expenses))],['Bank Deposits',formatCurrency(Number(x.bank_deposits))],['Expected Cash',formatCurrency(Number(x.expected_cash??x.expected_cash_live))],['Actual Cash',x.actual_cash==null?'—':formatCurrency(Number(x.actual_cash))],['Difference',x.difference==null?'—':formatCurrency(Number(x.difference))]],theme:'grid'});if(ds.length)autoTable(d,{head:[['Date','Bank','Reference','Amount','Recorded By']],body:ds.map(v=>[formatDateTime(v.created_at),v.bank_name,v.reference||'—',formatCurrency(v.amount),v.recorded_by]),theme:'grid'});d.save(`cash-up-${x.opening_time.slice(0,10)}.pdf`)}
