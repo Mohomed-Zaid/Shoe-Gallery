@@ -77,8 +77,13 @@ async function getInvoicePrefix() {
   return (data as Pick<StoreSettings, 'invoice_prefix'> | null)?.invoice_prefix || 'INV';
 }
 
-export async function getSales() {
-  return supabase
+export interface SalesListFilters {
+  createdFrom?: string;
+  createdBefore?: string;
+}
+
+export async function getSales(filters: SalesListFilters = {}) {
+  let query = supabase
     .from('sales')
     .select(`
       *,
@@ -93,8 +98,12 @@ export async function getSales() {
         )
       )
     `)
-    .neq('status', 'held')
-    .order('created_at', { ascending: false });
+    .neq('status', 'held');
+
+  if (filters.createdFrom) query = query.gte('created_at', filters.createdFrom);
+  if (filters.createdBefore) query = query.lt('created_at', filters.createdBefore);
+
+  return query.order('created_at', { ascending: false });
 }
 
 export async function getSaleById(id: string) {
