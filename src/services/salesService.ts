@@ -11,6 +11,7 @@ import type {
   Profile,
 } from '../types';
 import { calculateItemDiscount, getDiscountPrice, getDiscountPriceError } from '../utils/itemDiscount';
+import { CARD_PROCESSING_FEE_RATE, calculateCardFee } from '../utils/cardFee';
 
 export interface CartItem {
   variant_id: string;
@@ -59,11 +60,9 @@ export interface HeldSalePayload {
   cart_data: CartItem[];
 }
 
-export const CARD_PAYMENT_FEE_RATE = 0.0275;
+export const CARD_PAYMENT_FEE_RATE = CARD_PROCESSING_FEE_RATE;
 
-export function calculateCardPaymentFee(amount: number) {
-  return Math.round(amount * CARD_PAYMENT_FEE_RATE * 100) / 100;
-}
+export const calculateCardPaymentFee = calculateCardFee;
 
 function buildInvoiceNumber(prefix: string) {
   const now = new Date();
@@ -132,6 +131,12 @@ export async function createSale(payload: CreateSalePayload) {
   }
 
   const pricedItems = payload.items.map((item) => {
+    if (item.is_instant_sale) {
+      const numericCost = Number(item.cost_price);
+      if (item.cost_price == null || !Number.isFinite(numericCost) || numericCost < 0) {
+        throw new Error('Instant Billing item has an invalid cost. Re-enter its Cost Code.');
+      }
+    }
     const discountPrice = getDiscountPrice(
       Number(item.unit_price),
       item.discount_price,

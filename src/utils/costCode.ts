@@ -11,7 +11,13 @@ const COST_CODE_MAP: Readonly<Record<string, string>> = {
   '0': 'M',
 };
 
-export function encodeCostPrice(costPrice: number | string): string {
+const COST_DIGIT_MAP: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(COST_CODE_MAP).map(([digit, letter]) => [letter, digit]),
+  ),
+);
+
+export function encodeCost(costPrice: number | string): string {
   let integerDigits: string;
 
   if (typeof costPrice === 'number') {
@@ -28,3 +34,16 @@ export function encodeCostPrice(costPrice: number | string): string {
   return [...integerDigits].map((digit) => COST_CODE_MAP[digit]).join('');
 }
 
+export function decodeCostCode(code: string): number | null {
+  const normalizedCode = code.trim().toUpperCase();
+  if (!normalizedCode || !/^[BESTKINDOM]+$/.test(normalizedCode)) return null;
+
+  const numericCost = Number(
+    [...normalizedCode].map((letter) => COST_DIGIT_MAP[letter]).join(''),
+  );
+
+  return Number.isSafeInteger(numericCost) ? numericCost : null;
+}
+
+// Keep the existing barcode API stable while sharing the same mapping.
+export const encodeCostPrice = encodeCost;

@@ -32,7 +32,9 @@ export interface SalesReportRow {
   subtotal: number;
   discount: number;
   selling_price: number;
-  card_payment_fee: number;
+  gross_card_amount: number;
+  card_processing_fee: number;
+  net_card_amount: number;
   total: number;
   amount_paid: number;
   balance: number;
@@ -47,7 +49,9 @@ export interface SalesReportSummary {
   total_received: number;
   total_outstanding: number;
   total_discounts: number;
-  total_card_payment_fees: number;
+  total_gross_card_amount: number;
+  total_card_processing_fees: number;
+  total_net_card_amount: number;
 }
 
 export interface SalesReportResult {

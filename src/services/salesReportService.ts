@@ -20,7 +20,9 @@ const emptySummary: SalesReportSummary = {
   total_received: 0,
   total_outstanding: 0,
   total_discounts: 0,
-  total_card_payment_fees: 0,
+  total_gross_card_amount: 0,
+  total_card_processing_fees: 0,
+  total_net_card_amount: 0,
 };
 
 const numberValue = (value: unknown) => Number(value ?? 0);
@@ -36,7 +38,9 @@ function normalizeResult(value: unknown): SalesReportResult {
       subtotal: numberValue(item.subtotal),
       discount: numberValue(item.discount),
       selling_price: numberValue(item.selling_price),
-      card_payment_fee: numberValue(item.card_payment_fee),
+      gross_card_amount: numberValue(item.gross_card_amount),
+      card_processing_fee: numberValue(item.card_processing_fee),
+      net_card_amount: numberValue(item.net_card_amount),
       total: numberValue(item.total),
       amount_paid: numberValue(item.amount_paid),
       balance: numberValue(item.balance),
@@ -50,7 +54,9 @@ function normalizeResult(value: unknown): SalesReportResult {
     total_received: numberValue(summarySource.total_received),
     total_outstanding: numberValue(summarySource.total_outstanding),
     total_discounts: numberValue(summarySource.total_discounts),
-    total_card_payment_fees: numberValue(summarySource.total_card_payment_fees),
+    total_gross_card_amount: numberValue(summarySource.total_gross_card_amount),
+    total_card_processing_fees: numberValue(summarySource.total_card_processing_fees),
+    total_net_card_amount: numberValue(summarySource.total_net_card_amount),
   };
   assertUniqueSalesReportRows(rows);
   return { rows, total: numberValue(source.total), summary };
@@ -152,7 +158,9 @@ function exportRows(rows: SalesReportRow[]) {
     row.subtotal,
     row.discount,
     row.selling_price,
-    row.card_payment_fee,
+    row.gross_card_amount,
+    row.card_processing_fee,
+    row.net_card_amount,
     row.total,
     row.amount_paid,
     row.balance,
@@ -163,7 +171,7 @@ function exportRows(rows: SalesReportRow[]) {
 
 const headers = [
   'Invoice', 'Date', 'Time', 'Customer', 'Cashier', 'Items', 'Quantity',
-  'Subtotal', 'Discount', 'Selling Price', 'Card Fee (2.75%)', 'Total', 'Paid', 'Balance', 'Payment Method', 'Status',
+  'Subtotal', 'Discount', 'Selling Price', 'Gross Card Amount', 'Card Fee (2.75%)', 'Net Card Amount', 'Total', 'Paid', 'Balance', 'Payment Method', 'Status',
 ];
 
 export function downloadBlob(name: string, body: BlobPart, type: string) {

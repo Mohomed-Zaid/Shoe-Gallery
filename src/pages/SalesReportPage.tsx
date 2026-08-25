@@ -49,7 +49,9 @@ const emptySummary: SalesReportSummary = {
   total_received: 0,
   total_outstanding: 0,
   total_discounts: 0,
-  total_card_payment_fees: 0,
+  total_gross_card_amount: 0,
+  total_card_processing_fees: 0,
+  total_net_card_amount: 0,
 };
 
 const emptyOptions: SalesReportFilterOptions = { customers: [], cashiers: [] };
@@ -227,6 +229,9 @@ export function SalesReportPage() {
 }
 
 function SummaryCards({ summary }: { summary: SalesReportSummary }) {
+  const deduction = summary.total_card_processing_fees === 0
+    ? formatCurrency(0)
+    : `-${formatCurrency(summary.total_card_processing_fees)}`;
   const cards = [
     ['Total Sales', formatCurrency(summary.total_sales)],
     ['Total Invoices', summary.total_invoices.toLocaleString()],
@@ -234,10 +239,12 @@ function SummaryCards({ summary }: { summary: SalesReportSummary }) {
     ['Total Received', formatCurrency(summary.total_received)],
     ['Outstanding', formatCurrency(summary.total_outstanding)],
     ['Discounts', formatCurrency(summary.total_discounts)],
-    ['Card Fees (2.75%)', formatCurrency(summary.total_card_payment_fees)],
+    ['Gross Card Amount', formatCurrency(summary.total_gross_card_amount)],
+    ['Card Fee (2.75%)', deduction],
+    ['Net Card Amount', formatCurrency(summary.total_net_card_amount)],
   ];
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 2xl:grid-cols-9">
       {cards.map(([label, value]) => (
         <div key={label} className="glass-card p-4">
           <p className="text-xs uppercase tracking-wide text-dashboard-text-label">{label}</p>
@@ -270,7 +277,9 @@ function SalesTable({
         { key: 'subtotal', header: 'Subtotal' },
         { key: 'discount', header: 'Discount' },
         { key: 'selling-price', header: 'Selling Price' },
+        { key: 'gross-card', header: 'Gross Card Amount' },
         { key: 'card-fee', header: 'Card Fee (2.75%)' },
+        { key: 'net-card', header: 'Net Card Amount' },
         { key: 'total', header: 'Total' },
         { key: 'paid', header: 'Paid' },
         { key: 'balance', header: 'Balance' },
@@ -295,7 +304,9 @@ function SalesTable({
             <td className="px-4 py-3 text-sm">{formatCurrency(row.subtotal)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.discount)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.selling_price)}</td>
-            <td className="px-4 py-3 text-sm">{formatCurrency(row.card_payment_fee)}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.gross_card_amount)}</td>
+            <td className="px-4 py-3 text-sm text-red-300">{row.card_processing_fee === 0 ? formatCurrency(0) : `-${formatCurrency(row.card_processing_fee)}`}</td>
+            <td className="px-4 py-3 text-sm">{formatCurrency(row.net_card_amount)}</td>
             <td className="px-4 py-3 text-sm font-semibold text-dashboard-text-primary">{formatCurrency(row.total)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.amount_paid)}</td>
             <td className="px-4 py-3 text-sm">{formatCurrency(row.balance)}</td>

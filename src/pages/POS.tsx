@@ -14,6 +14,7 @@ import * as settingsService from '../services/settingsService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency } from '../utils/format';
 import { calculateItemDiscount, getDiscountPrice, getDiscountPriceError } from '../utils/itemDiscount';
+import { decodeCostCode } from '../utils/costCode';
 import {
   Alert,
   Button,
@@ -57,10 +58,10 @@ interface CustomerFormValues {
 
 interface InstantBillingFormValues {
   product_name: string;
-  cost_price: number;
+  cost_code: string;
   selling_price: number;
   quantity: number;
-  discount: number;
+  discount_price?: number;
   notes: string;
 }
 
@@ -123,8 +124,10 @@ export function POS() {
   const [isCustomerDisplayConnected, setIsCustomerDisplayConnected] = useState(false);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CustomerFormValues>();
   const instantBillingForm = useForm<InstantBillingFormValues>({
-    defaultValues: { cost_price: 0, quantity: 1, discount: 0 }
+    defaultValues: { cost_code: '', quantity: 1 }
   });
+  const instantCostCode = instantBillingForm.watch('cost_code');
+  const instantCostCodeIsValid = decodeCostCode(instantCostCode ?? '') !== null;
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const itemNumberInputRef = useRef<HTMLInputElement>(null);
   const cartRef = useRef<HTMLDivElement>(null);
@@ -629,14 +632,19 @@ export function POS() {
   const handleInstantBillingSubmit = (values: InstantBillingFormValues) => {
     const quantity = Number(values.quantity);
     const unitPrice = Number(values.selling_price);
-    const lineDiscount = Number(values.discount || 0);
-    const discountPrice = getDiscountPrice(unitPrice, undefined, lineDiscount, quantity);
+    const numericCost = decodeCostCode(values.cost_code);
+    if (numericCost === null) {
+      instantBillingForm.setError('cost_code', { message: 'Invalid cost code.' });
+      return;
+    }
+    const enteredDiscountPrice = Number(values.discount_price);
+    const discountPrice = Number.isFinite(enteredDiscountPrice) ? enteredDiscountPrice : unitPrice;
     setCart((currentCart) => [
       ...currentCart,
       {
         variant_id: `instant-${Date.now()}`,
         quantity,
-        cost_price: Number(values.cost_price),
+        cost_price: numericCost,
         unit_price: unitPrice,
         discount_price: discountPrice,
         discount_amount: getDiscountPriceError(unitPrice, discountPrice)
@@ -1401,11 +1409,44 @@ export function POS() {
           <form onSubmit={instantBillingForm.handleSubmit(handleInstantBillingSubmit)} className="space-y-4">
             <Input label="Product Name" error={instantBillingForm.formState.errors.product_name?.message} {...instantBillingForm.register('product_name', { required: 'Product Name is required' })} />
             <div className="grid gap-4 md:grid-cols-3">
-              <Input type="number" step="0.01" label="Cost Price" error={instantBillingForm.formState.errors.cost_price?.message} {...instantBillingForm.register('cost_price', { required: 'Cost is required', min: { value: 0, message: 'Cost cannot be negative' }, valueAsNumber: true })} />
+              <div>
+                <Input
+                  label="Cost Code"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={8}
+                  error={instantBillingForm.formState.errors.cost_code?.message}
+                  {...instantBillingForm.register('cost_code', {
+                    required: 'Cost Code is required',
+                    setValueAs: (value: string) => value.trim().toUpperCase(),
+                    validate: (value) => decodeCostCode(value) !== null || 'Invalid cost code.',
+                    onChange: (event) => {
+                      event.target.value = event.target.value.toUpperCase();
+                    },
+                  })}
+                />
+                {instantCostCode && instantCostCodeIsValid && !instantBillingForm.formState.errors.cost_code && (
+                  <p className="mt-1 text-sm text-emerald-400">✓ Valid Cost Code</p>
+                )}
+              </div>
               <Input type="number" step="0.01" label="Selling Price" error={instantBillingForm.formState.errors.selling_price?.message} {...instantBillingForm.register('selling_price', { required: 'Price is required', min: { value: 0, message: 'Price cannot be negative' }, valueAsNumber: true })} />
               <Input type="number" label="Quantity" error={instantBillingForm.formState.errors.quantity?.message} {...instantBillingForm.register('quantity', { required: 'Quantity is required', min: 1 })} />
             </div>
-            <Input type="number" step="0.01" label="Discount" error={instantBillingForm.formState.errors.discount?.message} {...instantBillingForm.register('discount', { min: 0 })} />
+            <Input
+              type="number"
+              step="0.01"
+              label="Discount Price (Optional)"
+              error={instantBillingForm.formState.errors.discount_price?.message}
+              {...instantBillingForm.register('discount_price', {
+                min: { value: 0, message: 'Discount price cannot be negative' },
+                valueAsNumber: true,
+                validate: (value) => value == null
+                  || Number.isNaN(value)
+                  || value <= Number(instantBillingForm.getValues('selling_price'))
+                  || 'Discount price cannot exceed selling price',
+              })}
+            />
             <Textarea label="Notes" rows={2} {...instantBillingForm.register('notes')} />
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowInstantBillingModal(false)}>
