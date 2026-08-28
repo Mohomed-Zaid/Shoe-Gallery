@@ -213,8 +213,7 @@ export function POS() {
   ));
   const maximumCartDiscount = Math.max(subtotal - lineDiscountTotal, 0);
   const totalAfterDiscount = subtotal - lineDiscountTotal - cartDiscount;
-  const cardPaymentFee = paymentMethod === 'card' ? salesService.calculateCardPaymentFee(totalAfterDiscount) : 0;
-  const grandTotal = totalAfterDiscount + cardPaymentFee;
+  const grandTotal = totalAfterDiscount;
   const changeDue = paymentMethod === 'cash' ? Math.max(amountReceived - grandTotal, 0) : 0;
 
   const customerDisplaySnapshot = useMemo<CustomerDisplaySnapshot>(() => ({
@@ -234,14 +233,12 @@ export function POS() {
     subtotal,
     itemDiscount: lineDiscountTotal,
     saleDiscount: cartDiscount,
-    paymentFee: cardPaymentFee,
     grandTotal,
     paymentMethod,
     amountReceived: paymentMethod === 'cash' ? amountReceived : grandTotal,
     changeDue,
   }), [
     amountReceived,
-    cardPaymentFee,
     cart,
     cartDiscount,
     changeDue,
@@ -1215,12 +1212,6 @@ export function POS() {
                   <div className="flex items-center justify-between text-dashboard-text-sub">
                     <span>Sale Discount</span>
                     <span>-{formatCurrency(cartDiscount)}</span>
-                  </div>
-                )}
-                {paymentMethod === 'card' && (
-                  <div className="flex items-center justify-between text-dashboard-text-sub">
-                    <span>Card Fee (2.75%)</span>
-                    <span>{formatCurrency(cardPaymentFee)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 text-base font-semibold text-dashboard-text-primary">

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { printReceipt } from '../services/receiptPrintService';
 import { getErrorMessage } from '../utils/errors';
 import { formatCurrency, formatDate } from '../utils/format';
+import { getCustomerSaleAmount } from '../utils/cardFee';
 
 type SalesPeriod = 'today' | 'yesterday' | 'last7days' | 'thisMonth' | 'lastMonth' | 'allTime' | 'custom';
 
@@ -140,7 +141,7 @@ export function Sales() {
   }, [sales, search]);
 
   const filteredTotal = useMemo(
-    () => filteredSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
+    () => filteredSales.reduce((sum, sale) => sum + getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee), 0),
     [filteredSales],
   );
 
@@ -261,7 +262,7 @@ export function Sales() {
               <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatDate(sale.created_at)}</td>
               <td className="px-6 py-4 text-sm text-dashboard-text-sub">{sale.customer?.name || 'Walk-in Customer'}</td>
               <td className="px-6 py-4 text-sm text-dashboard-text-sub">{sale.cashier?.full_name || 'Unknown'}</td>
-              <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{formatCurrency(Number(sale.total_amount))}</td>
+              <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{formatCurrency(getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee))}</td>
               <td className="px-6 py-4 text-sm capitalize text-dashboard-text-sub">{sale.payment_method.replace('_', ' ')}</td>
               <td className="px-6 py-4 text-sm">
                 <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(sale.status)}`}>

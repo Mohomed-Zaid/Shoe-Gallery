@@ -275,7 +275,6 @@ export function CustomerDisplay() {
                 <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Subtotal</span><span className="font-semibold tabular-nums">{formatCurrency(snapshot!.subtotal)}</span></div>
                 {snapshot!.itemDiscount > 0 && <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Item Discount</span><span className="font-semibold tabular-nums">- {formatCurrency(snapshot!.itemDiscount)}</span></div>}
                 <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Sale Discount</span><span className="font-semibold tabular-nums">- {formatCurrency(snapshot!.saleDiscount)}</span></div>
-                {snapshot!.paymentFee > 0 && <div className="flex justify-between gap-5"><span className="text-[#6d706b]">Card Fee</span><span className="font-semibold tabular-nums">{formatCurrency(snapshot!.paymentFee)}</span></div>}
                 <div className="mt-2 flex items-end justify-between gap-5 border-t border-[#c98ea0] pt-2 text-[#173f2d]">
                   <span className="text-lg font-black uppercase tracking-[.08em] sm:text-2xl">Grand Total</span>
                   <span className="text-2xl font-black tabular-nums sm:text-4xl">{formatCurrency(snapshot!.grandTotal)}</span>

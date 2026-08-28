@@ -1,5 +1,6 @@
 import type { Sale } from '../../types';
 import { formatCurrency } from '../../utils/format';
+import { getCustomerSaleAmount } from '../../utils/cardFee';
 
 function TotalRow({ label, value }: { label: string; value: string }) {
   return (
@@ -11,7 +12,7 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 }
 
 export function ReceiptTotals({ sale }: { sale: Sale }) {
-  const invoiceTotal = Math.max(Number(sale.total_amount) - Number(sale.card_payment_fee ?? 0), 0);
+  const invoiceTotal = getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee);
   const saleDiscount = Number(sale.invoice_discount_amount ?? 0);
   const itemDiscount = Math.max(Number(sale.discount_amount) - saleDiscount, 0);
 

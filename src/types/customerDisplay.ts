@@ -20,7 +20,6 @@ export interface CustomerDisplaySnapshot {
   subtotal: number;
   itemDiscount: number;
   saleDiscount: number;
-  paymentFee: number;
   grandTotal: number;
   paymentMethod: 'cash' | 'card' | 'bank_transfer' | 'credit';
   amountReceived: number;

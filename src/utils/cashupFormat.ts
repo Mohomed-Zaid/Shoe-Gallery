@@ -1,1 +1,1 @@
-import type{CashupRow}from'../types/cashupReport';export const cashupStatusLabel=(r:Pick<CashupRow,'status'|'difference_status'>)=>r.status==='open'?'OPEN':r.difference_status.toUpperCase();
+import type{CashupRow}from'../types/cashupReport';export const cashupStatusLabel=(r:Pick<CashupRow,'status'|'difference_status'|'auto_closed'>)=>r.status==='open'?'OPEN':r.auto_closed?'AUTO CLOSED':r.difference_status.toUpperCase();

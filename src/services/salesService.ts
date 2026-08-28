@@ -11,7 +11,7 @@ import type {
   Profile,
 } from '../types';
 import { calculateItemDiscount, getDiscountPrice, getDiscountPriceError } from '../utils/itemDiscount';
-import { CARD_PROCESSING_FEE_RATE, calculateCardFee } from '../utils/cardFee';
+import { requireCurrentCashRegister } from './cashRegisterService';
 
 export interface CartItem {
   variant_id: string;
@@ -59,10 +59,6 @@ export interface HeldSalePayload {
   notes?: string;
   cart_data: CartItem[];
 }
-
-export const CARD_PAYMENT_FEE_RATE = CARD_PROCESSING_FEE_RATE;
-
-export const calculateCardPaymentFee = calculateCardFee;
 
 function buildInvoiceNumber(prefix: string) {
   const now = new Date();
@@ -126,6 +122,7 @@ export async function getSaleById(id: string) {
 }
 
 export async function createSale(payload: CreateSalePayload) {
+  await requireCurrentCashRegister();
   if (payload.items.length === 0) {
     throw new Error('Please add at least one item to complete the sale.');
   }
@@ -178,10 +175,10 @@ export async function createSale(payload: CreateSalePayload) {
   const subtotal = pricedItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const itemDiscount = pricedItems.reduce((sum, item) => sum + item.discount_amount, 0);
   const discountAmount = (payload.discount_amount ?? 0) + itemDiscount;
-  const amountAfterDiscount = subtotal - discountAmount;
-  const cardPaymentFee = payload.payment_method === 'card' ? calculateCardPaymentFee(amountAfterDiscount) : 0;
   const taxAmount = payload.tax_amount ?? 0;
-  const grandTotal = subtotal - discountAmount + taxAmount + cardPaymentFee;
+  // Processing fees are an internal reporting expense. Payment method must
+  // never change the sale amount owed or recorded for the customer.
+  const grandTotal = subtotal - discountAmount + taxAmount;
   if (discountAmount < 0 || grandTotal < 0) {
     throw new Error('Discount cannot exceed the sale amount.');
   }
@@ -210,7 +207,9 @@ export async function createSale(payload: CreateSalePayload) {
       discount_amount: discountAmount,
       invoice_discount_amount: payload.discount_amount ?? 0,
       tax_amount: taxAmount,
-      card_payment_fee: cardPaymentFee,
+      // Non-zero values identify legacy transactions that stored a surcharge.
+      // New transactions always derive card fees from sale_payments in reports.
+      card_payment_fee: 0,
       total_amount: grandTotal,
       paid_amount: paidAmount,
       amount_tendered: amountTendered,

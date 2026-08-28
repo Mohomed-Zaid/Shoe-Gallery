@@ -5,6 +5,7 @@ import { BarChart3, ChevronDown, CreditCard, LogOut, Menu, Sun, X } from 'lucide
 import { useAuth } from '../context/AuthContext';
 import { getNavItemsForRole, getPageTitle } from '../utils/navigation';
 import { isBusinessAdminEmail, SUPER_ADMIN_EMAIL } from '../services/subscriptionService';
+import { CashRegisterLifecycle } from '../components/cash-register/CashRegisterLifecycle';
 
 interface DashboardLayoutProps { children: ReactNode }
 
@@ -151,7 +152,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 
-  return <div
+  return <><CashRegisterLifecycle/><div
     className="flex min-h-screen min-w-0 bg-dashboard-bg-deep"
     style={{ '--sidebar-width': isMobile ? '0px' : effectiveCollapsed ? '4.5rem' : '16rem' } as CSSProperties}
   >
@@ -171,5 +172,5 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </header>
       <main className="relative z-10 min-w-0 flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-5">{children}</main>
     </div>
-  </div>;
+  </div></>;
 }

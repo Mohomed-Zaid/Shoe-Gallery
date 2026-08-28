@@ -35,7 +35,9 @@ export interface CashupRow {
     counted_cash: number | null;
     difference: number | null;
     status: 'open' | 'closed';
-    difference_status: 'open' | 'balanced' | 'short' | 'over';
+    auto_closed: boolean;
+    closed_by_type: 'manual' | 'automatic' | null;
+    difference_status: 'open' | 'auto_closed' | 'balanced' | 'short' | 'over';
     notes: string | null;
 }
 export interface CashupSummary {

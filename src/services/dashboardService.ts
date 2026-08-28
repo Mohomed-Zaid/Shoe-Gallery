@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getTodayExpenseTotal } from './expenseReportService';
+import { getCustomerSaleAmount } from '../utils/cardFee';
 
 export type SalesTrendFilter = 'today' | '7d' | '30d' | 'month';
 
@@ -113,14 +114,14 @@ export async function getSalesTrend(filter: SalesTrendFilter): Promise<TrendPoin
 export async function getRecentSales(): Promise<RecentSale[]> {
   const { data, error } = await supabase
     .from('sales')
-    .select('id,invoice_number,total_amount,created_at,payment_method,customer:customers(name),sale_items(id)')
+    .select('id,invoice_number,total_amount,card_payment_fee,created_at,payment_method,customer:customers(name),sale_items(id)')
     .in('status', ['completed', 'partially_returned', 'fully_returned'])
     .order('created_at', { ascending: false })
     .limit(5);
   if (error) throw error;
 
   type SaleRow = {
-    id: string; invoice_number: string | null; total_amount: number; created_at: string;
+    id: string; invoice_number: string | null; total_amount: number; card_payment_fee: number; created_at: string;
     payment_method: string; customer: { name: string } | null; sale_items: Array<{ id: string }> | null;
   };
   return ((data ?? []) as unknown as SaleRow[]).map((sale) => ({
@@ -129,7 +130,7 @@ export async function getRecentSales(): Promise<RecentSale[]> {
     customer: sale.customer?.name ?? 'Walk-in Customer',
     itemCount: sale.sale_items?.length ?? 0,
     paymentMethod: sale.payment_method,
-    amount: Number(sale.total_amount),
+    amount: getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee),
     created_at: sale.created_at,
   }));
 }
