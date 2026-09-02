@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, Search, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { Product, Category, Brand } from '../types';
 import * as productService from '../services/productService';
@@ -43,10 +43,33 @@ export function Products() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [formMode, setFormMode] = useState<ProductFormMode>('normal');
+  const [searchQuery, setSearchQuery] = useState('');
   const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<ProductFormInputs>();
   const sellingPrice = Number(watch('selling_price'));
   const companyPercentage = Number(watch('company_percentage'));
   const calculatedCost = calculateCompanyCost(sellingPrice, companyPercentage);
+
+  const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return products;
+
+    return products.filter((product) => {
+      const category = categories.find((item) => item.id === product.category_id)?.name ?? '';
+      const brand = brands.find((item) => item.id === product.brand_id)?.name ?? '';
+      const productType = product.product_type === 'company' ? 'company' : 'normal';
+
+      return [
+        product.item_article,
+        product.item_number,
+        product.code,
+        product.name,
+        product.description,
+        category,
+        brand,
+        productType,
+      ].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [brands, categories, products, searchQuery]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -175,6 +198,33 @@ export function Products() {
 
       {error && <Alert message={error} />}
 
+      <div className="relative max-w-xl">
+        <label htmlFor="product-search" className="sr-only">Search products</label>
+        <Search
+          size={18}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub"
+        />
+        <input
+          id="product-search"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by article, name, category, or brand..."
+          className="dashboard-input w-full pl-10 pr-10"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            aria-label="Clear product search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub transition-colors hover:text-dashboard-text-primary"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <LoadingSpinner />
       ) : (
@@ -187,10 +237,10 @@ export function Products() {
             { key: 'created', header: 'Created At' },
             { key: 'actions', header: 'Actions', className: 'text-right' },
           ]}
-          isEmpty={products.length === 0}
-          emptyMessage="No products found"
+          isEmpty={filteredProducts.length === 0}
+          emptyMessage={searchQuery.trim() ? 'No products match your search' : 'No products found'}
         >
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             <tr key={product.id} className="hover:bg-dashboard-hover">
               <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-dashboard-text-primary">
                 {product.item_article || product.item_number || product.code}
