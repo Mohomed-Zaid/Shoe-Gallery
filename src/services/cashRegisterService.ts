@@ -82,6 +82,16 @@ export async function addCashExpense(sessionId: string, amount: number, descript
   notifyCashRegisterChanged();
 }
 
+export async function updateCashExpense(expenseId: string, amount: number, description: string) {
+  const { error } = await supabase.rpc('update_cash_register_expense', {
+    p_expense_id: expenseId,
+    p_amount: amount,
+    p_description: description,
+  });
+  if (error) throw error;
+  notifyCashRegisterChanged();
+}
+
 export async function recordBankDeposit(sessionId: string, amount: number, bankName: string, reference: string, notes: string) {
   const current = await requireCurrentCashRegister();
   if (current.id !== sessionId) throw new Error(AUTO_CLOSED_REGISTER_MESSAGE);

@@ -21,6 +21,16 @@ export interface Brand {
   created_at: string;
 }
 
+export interface Cheque {
+  id: string;
+  name: string;
+  cheque_number: string;
+  bank: string;
+  cheque_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Product {
   id: string;
   code: string;

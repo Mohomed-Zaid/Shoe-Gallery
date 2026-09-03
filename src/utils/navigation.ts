@@ -15,6 +15,7 @@ import {
   RotateCcw,
   BarChart3,
   Settings,
+  ScrollText,
   type LucideIcon,
 } from 'lucide-react';
 import type { UserRole } from '../types';
@@ -52,6 +53,7 @@ export const navItems: NavItem[] = [
   { path: '/cash-register', label: 'Cash Register', icon: CircleDollarSign, roles: ['admin', 'cashier'] },
   { path: '/sales', label: 'Sales', icon: ReceiptText, roles: ['admin', 'cashier'] },
   { path: '/returns', label: 'Sales Returns', icon: RotateCcw, roles: ['admin', 'cashier'] },
+  { path: '/cheques', label: 'Cheques', icon: ScrollText, roles: ['admin', 'cashier'] },
   { path: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'cashier'], children: reportNavItems },
   { path: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
 ];

@@ -40,6 +40,7 @@ import { ProfitReportPage } from './pages/ProfitReportPage';
 import { CashupReportPage } from './pages/CashupReportPage';
 import { ExpensesReportPage } from './pages/ExpensesReportPage';
 import { CustomerDisplay } from './pages/CustomerDisplay';
+import { Cheques } from './pages/Cheques';
 
 const BarcodePrinting = lazy(() => import('./pages/BarcodePrinting').then((module) => ({ default: module.BarcodePrinting })));
 const POS = lazy(() => import('./pages/POS').then((module) => ({ default: module.POS })));
@@ -86,6 +87,7 @@ function App() {
                       <Route path="/returns" element={<SalesReturnsPage />} />
                       <Route path="/returns/new" element={<CreateSalesReturnPage />} />
                       <Route path="/returns/:id" element={<SalesReturnDetailsPage />} />
+                      <Route path="/cheques" element={<Cheques />} />
                       <Route path="/reports" element={<ReportsHomePage />} />
                       <Route path="/reports/sales" element={<InvoiceSalesReportPage />} />
                       <Route path="/reports/purchases" element={<ProtectedRoute allowedRoles={['admin']}><PurchaseReportPage /></ProtectedRoute>} />
