@@ -64,10 +64,15 @@ export async function getAllProductVariants() {
 }
 
 export async function getVariantByBarcode(barcodeNumber: string) {
+  const normalizedBarcode = barcodeNumber.trim();
+  if (!normalizedBarcode) return { data: null, error: null };
+
   return supabase
     .from('product_variants')
-    .select('id, barcode_number')
-    .eq('barcode_number', barcodeNumber)
+    // Barcode is owned by the variant. Return the parent in the same query so
+    // POS can add this exact, current variant without a second lookup.
+    .select('*, product:products(*, category:categories(*))')
+    .eq('barcode_number', normalizedBarcode)
     .maybeSingle();
 }
 

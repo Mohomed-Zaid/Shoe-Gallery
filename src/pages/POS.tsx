@@ -414,9 +414,15 @@ export function POS() {
       return;
     }
 
-    const matchedVariant = variants.find((variant) => variant.id === data.id) ?? null;
-    if (!matchedVariant) {
+    const matchedVariant = data as VariantWithProduct | null;
+    if (!matchedVariant?.product) {
       setError('Barcode not found.');
+      focusBarcodeInput();
+      return;
+    }
+
+    if (Number(matchedVariant.stock_quantity) <= 0) {
+      setError(matchedVariant.product.name + ' (' + matchedVariant.size + ' / ' + matchedVariant.color + ') is out of stock.');
       focusBarcodeInput();
       return;
     }
@@ -424,7 +430,7 @@ export function POS() {
     addVariantToCart(matchedVariant);
     playScanSuccessSound();
     setBarcodeInput('');
-  }, [addVariantToCart, focusBarcodeInput, variants]);
+  }, [addVariantToCart, focusBarcodeInput]);
 
   const enterReturnMode = useCallback(() => {
     setReturnMode(true);
