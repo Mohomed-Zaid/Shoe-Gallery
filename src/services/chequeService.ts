@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type { Cheque } from '../types';
 
-export type ChequeInput = Pick<Cheque, 'name' | 'cheque_number' | 'bank' | 'cheque_date'>;
+export type ChequeInput = Pick<Cheque, 'name' | 'cheque_number' | 'bank' | 'amount' | 'cheque_date'>;
 
 export async function getCheques() {
   return supabase.from('cheques').select('*');
