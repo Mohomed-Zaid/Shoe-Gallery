@@ -5,7 +5,6 @@ import { Alert, Button, DataTable, Input, LoadingSpinner, Modal, PageHeader } fr
 import * as chequeService from '../services/chequeService';
 import type { Cheque } from '../types';
 import { getErrorMessage } from '../utils/errors';
-import { formatCurrency } from '../utils/format';
 
 type DateFilter = 'all' | 'today' | 'upcoming' | 'past';
 type ChequeFormInputs = chequeService.ChequeInput;
@@ -72,14 +71,14 @@ export function Cheques() {
   const openCreate = () => {
     setError(null);
     setEditingCheque(null);
-    reset({ name: '', cheque_number: '', bank: '', amount: undefined, cheque_date: localDateValue() });
+    reset({ name: '', cheque_number: '', bank: '', cheque_date: localDateValue() });
     setShowForm(true);
   };
 
   const openEdit = (cheque: Cheque) => {
     setError(null);
     setEditingCheque(cheque);
-    reset({ name: cheque.name, cheque_number: cheque.cheque_number, bank: cheque.bank, amount: Number(cheque.amount), cheque_date: cheque.cheque_date });
+    reset({ name: cheque.name, cheque_number: cheque.cheque_number, bank: cheque.bank, cheque_date: cheque.cheque_date });
     setShowForm(true);
   };
 
@@ -95,7 +94,6 @@ export function Cheques() {
       name: values.name.trim(),
       cheque_number: values.cheque_number.trim(),
       bank: values.bank.trim(),
-      amount: values.amount,
       cheque_date: values.cheque_date,
     };
     const result = editingCheque
@@ -173,10 +171,9 @@ export function Cheques() {
           columns={[
             { key: 'name', header: 'Name', className: 'w-[22%]' },
             { key: 'number', header: 'Cheque Number', className: 'w-[24%]' },
-            { key: 'bank', header: 'Bank', className: 'w-[20%]' },
-            { key: 'amount', header: 'Amount', className: 'w-[14%] text-right' },
-            { key: 'date', header: 'Date', className: 'w-[17%]' },
-            { key: 'actions', header: 'Actions', className: 'w-[10%] text-right' },
+            { key: 'bank', header: 'Bank', className: 'w-[23%]' },
+            { key: 'date', header: 'Date', className: 'w-[19%]' },
+            { key: 'actions', header: 'Actions', className: 'w-[12%] text-right' },
           ]}
           isEmpty={visibleCheques.length === 0}
           emptyMessage={cheques.length === 0 ? 'No cheques recorded. Use the + Add Cheque button to add the first cheque.' : 'No cheques match your search or filter.'}
@@ -187,7 +184,6 @@ export function Cheques() {
               <td className="truncate px-2 py-3 font-medium text-dashboard-text-primary sm:px-4" title={cheque.name}>{cheque.name}</td>
               <td className="truncate px-2 py-3 font-mono text-dashboard-text-label sm:px-4" title={cheque.cheque_number}>{cheque.cheque_number}</td>
               <td className="truncate px-2 py-3 text-dashboard-text-sub sm:px-4" title={cheque.bank}>{cheque.bank}</td>
-              <td className="whitespace-nowrap px-2 py-3 text-right font-medium text-dashboard-text-primary sm:px-4">{formatCurrency(Number(cheque.amount))}</td>
               <td className="whitespace-nowrap px-2 py-3 text-dashboard-text-sub sm:px-4">{formatChequeDate(cheque.cheque_date)}</td>
               <td className="whitespace-nowrap px-1 py-3 text-right sm:px-3">
                 <button type="button" onClick={() => openEdit(cheque)} className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white" title="Edit cheque" aria-label={`Edit cheque ${cheque.cheque_number}`}><Edit2 size={17} /></button>
@@ -205,7 +201,6 @@ export function Cheques() {
             <Input id="cheque-name" label="Name *" autoFocus error={errors.name?.message} {...register('name', { required: 'Name is required', validate: (value) => value.trim().length > 0 || 'Name is required' })} />
             <Input id="cheque-number" label="Cheque Number *" inputMode="text" error={errors.cheque_number?.message} {...register('cheque_number', { required: 'Cheque number is required', validate: (value) => value.trim().length > 0 || 'Cheque number is required' })} />
             <Input id="cheque-bank" label="Bank *" error={errors.bank?.message} {...register('bank', { required: 'Bank is required', validate: (value) => value.trim().length > 0 || 'Bank is required' })} />
-            <Input id="cheque-amount" type="number" inputMode="decimal" min="0.01" step="0.01" label="Amount (LKR) *" error={errors.amount?.message} {...register('amount', { valueAsNumber: true, required: 'Amount is required', min: { value: 0.01, message: 'Amount must be greater than zero' } })} />
             <Input id="cheque-date" type="date" label="Date *" error={errors.cheque_date?.message} {...register('cheque_date', { required: 'Date is required' })} />
             <div className="flex gap-3 pt-3">
               <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>Cancel</Button>

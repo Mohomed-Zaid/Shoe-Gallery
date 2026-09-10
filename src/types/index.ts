@@ -26,7 +26,6 @@ export interface Cheque {
   name: string;
   cheque_number: string;
   bank: string;
-  amount: number;
   cheque_date: string;
   created_at: string;
   updated_at: string;

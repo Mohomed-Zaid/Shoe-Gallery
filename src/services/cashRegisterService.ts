@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { BankDeposit, CashRegisterSession, CashRegisterSummary } from '../types/cashRegister';
+import type { BankDeposit, CashRegisterExpense, CashRegisterSession, CashRegisterSummary } from '../types/cashRegister';
 
 export const CASH_REGISTER_CHANGED_EVENT = 'shoe-gallery-cash-register-changed';
 export const AUTO_CLOSED_REGISTER_MESSAGE = 'Previous cash register was automatically closed at midnight. Open a new cash register to continue.';
@@ -92,6 +92,12 @@ export async function updateCashExpense(expenseId: string, amount: number, descr
   notifyCashRegisterChanged();
 }
 
+export async function deleteCashExpense(expenseId: string) {
+  const { error } = await supabase.rpc('delete_cash_register_expense', { p_expense_id: expenseId });
+  if (error) throw error;
+  notifyCashRegisterChanged();
+}
+
 export async function recordBankDeposit(sessionId: string, amount: number, bankName: string, reference: string, notes: string) {
   const current = await requireCurrentCashRegister();
   if (current.id !== sessionId) throw new Error(AUTO_CLOSED_REGISTER_MESSAGE);
@@ -112,6 +118,17 @@ export async function getSessionBankDeposits(sessionId: string) {
     ...item, amount: Number(item.amount),
     recorded_by: item.recorder?.full_name || item.recorder?.email || 'Cashier',
   })) as BankDeposit[];
+}
+
+export async function getSessionExpenses(sessionId: string) {
+  const { data, error } = await supabase.from('cash_register_expenses')
+    .select('id,session_id,amount,description,expense_time,user_id,user:profiles!cash_register_expenses_user_id_fkey(full_name,email)')
+    .eq('session_id', sessionId).order('expense_time', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((item: any) => ({
+    ...item, amount: Number(item.amount),
+    recorded_by: item.user?.full_name || item.user?.email || 'Cashier',
+  })) as CashRegisterExpense[];
 }
 
 export async function getRegisterSessions(page = 1, pageSize = 20) {
