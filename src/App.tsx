@@ -58,7 +58,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/subscription-expired" element={<ProtectedRoute><SubscriptionGuard><SubscriptionExpiredPage /></SubscriptionGuard></ProtectedRoute>} />
-            <Route path="/customer-display" element={<ProtectedRoute><SubscriptionGuard><CustomerDisplay /></SubscriptionGuard></ProtectedRoute>} />
+            <Route path="/customer-display" element={<CustomerDisplay />} />
             <Route
               path="/*"
               element={
