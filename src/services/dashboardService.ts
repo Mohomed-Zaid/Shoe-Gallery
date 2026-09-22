@@ -115,7 +115,7 @@ export async function getRecentSales(): Promise<RecentSale[]> {
   const { data, error } = await supabase
     .from('sales')
     .select('id,invoice_number,total_amount,card_payment_fee,created_at,payment_method,customer:customers(name),sale_items(id)')
-    .in('status', ['completed', 'partially_returned', 'fully_returned'])
+    .in('status', ['completed', 'partially_returned'])
     .order('created_at', { ascending: false })
     .limit(5);
   if (error) throw error;

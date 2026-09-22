@@ -131,12 +131,27 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     .filter((item) => item.return?.sale_id)
     .map((item) => ({ ...item, sale_id: item.return!.sale_id }));
 
+  const returnedBySale = new Map<string, number>();
+  returnedItems.forEach((r) => {
+    returnedBySale.set(r.sale_id, (returnedBySale.get(r.sale_id) ?? 0) + Number(r.return_total || 0));
+  });
+
+  const getSaleNetRevenue = (sale: Sale) => {
+    if (sale.status === 'cancelled' || sale.status === 'fully_returned') return 0;
+    const original = Number(sale.total_amount || 0);
+    if (sale.status === 'partially_returned') {
+      const returned = returnedBySale.get(sale.id) ?? 0;
+      return Math.max(0, original - returned);
+    }
+    return original;
+  };
+
   const todaySales = sales
     .filter((sale) => sale.created_at >= todayRange.from && sale.created_at <= todayRange.to)
-    .reduce((sum, sale) => sum + Number(sale.total_amount), 0);
+    .reduce((sum, sale) => sum + getSaleNetRevenue(sale), 0);
   const monthlySales = sales
     .filter((sale) => sale.created_at >= monthRange.from && sale.created_at <= monthRange.to)
-    .reduce((sum, sale) => sum + Number(sale.total_amount), 0);
+    .reduce((sum, sale) => sum + getSaleNetRevenue(sale), 0);
   const totals = calculateProfitTotals(sales, saleItems, returnedItems);
   const totalRevenue = totals.revenue;
   const grossProfit = totals.profit;
@@ -153,7 +168,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   sales.forEach((sale) => {
     const key = new Date(sale.created_at).toLocaleDateString('en-US', { weekday: 'short' });
     if (salesTrendMap.has(key)) {
-      salesTrendMap.set(key, (salesTrendMap.get(key) ?? 0) + Number(sale.total_amount));
+      salesTrendMap.set(key, (salesTrendMap.get(key) ?? 0) + getSaleNetRevenue(sale));
     }
   });
 
@@ -166,7 +181,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   sales.forEach((sale) => {
     const key = new Date(sale.created_at).toLocaleDateString('en-US', { month: 'short' });
     if (monthlyRevenueMap.has(key)) {
-      monthlyRevenueMap.set(key, (monthlyRevenueMap.get(key) ?? 0) + Number(sale.total_amount));
+      monthlyRevenueMap.set(key, (monthlyRevenueMap.get(key) ?? 0) + getSaleNetRevenue(sale));
     }
   });
 
@@ -311,11 +326,13 @@ export async function getReportsBundle(range: ReportRange, custom?: DateRange): 
     amount: amount - (supplierPaymentMap[label] ?? 0),
   }));
 
+  const completedOrders = sales.filter((s) => s.status !== 'cancelled' && s.status !== 'fully_returned');
+
   return {
     salesSummary: {
       sales: salesAmount,
-      orders: sales.length,
-      averageSale: sales.length ? salesAmount / sales.length : 0,
+      orders: completedOrders.length,
+      averageSale: completedOrders.length ? salesAmount / completedOrders.length : 0,
       profit,
     },
     inventorySummary: {

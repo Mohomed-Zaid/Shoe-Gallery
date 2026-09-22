@@ -94,11 +94,41 @@ function periodButtonClass(active: boolean) {
     : base + ' border-white/15 bg-white/[0.06] text-dashboard-text-sub hover:border-dashboard-accent/50 hover:text-dashboard-text-primary';
 }
 
+type SaleStatusFilter = 'all' | 'completed' | 'returned' | 'cancelled';
+
+function getSaleReturnedAmount(sale: SaleWithRelations): number {
+  if (sale.status === 'fully_returned') {
+    return getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee);
+  }
+  if (!sale.sales_returns || sale.sales_returns.length === 0) {
+    return 0;
+  }
+  const completedReturns = sale.sales_returns.filter((r) => r.status === 'completed');
+  const returnItemsTotal = completedReturns.reduce(
+    (sum, r) => sum + (r.sales_return_items ?? []).reduce((iSum, item) => iSum + Number(item.return_total || 0), 0),
+    0,
+  );
+  if (returnItemsTotal > 0) return returnItemsTotal;
+  return completedReturns.reduce((sum, r) => sum + Number(r.refund_amount || 0) + Number(r.store_credit_amount || 0), 0);
+}
+
+function getSaleNetAmount(sale: SaleWithRelations): number {
+  if (sale.status === 'cancelled') return 0;
+  const original = getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee);
+  if (sale.status === 'fully_returned') return 0;
+  if (sale.status === 'partially_returned') {
+    const returned = getSaleReturnedAmount(sale);
+    return Math.max(0, original - returned);
+  }
+  return original;
+}
+
 export function Sales() {
   const { profile } = useAuth();
   const [sales, setSales] = useState<SaleWithRelations[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<SaleStatusFilter>('all');
   const initialBusinessDate = useMemo(() => businessDate(), []);
   const [period, setPeriod] = useState<SalesPeriod>('today');
   const [fromDate, setFromDate] = useState(initialBusinessDate);
@@ -130,23 +160,60 @@ export function Sales() {
     fetchSales();
   }, [fetchSales]);
 
+  const statusCounts = useMemo(() => {
+    return {
+      all: sales.length,
+      completed: sales.filter((s) => s.status === 'completed' || s.status === 'partially_returned').length,
+      returned: sales.filter((s) => s.status === 'fully_returned').length,
+      cancelled: sales.filter((s) => s.status === 'cancelled').length,
+    };
+  }, [sales]);
+
   const filteredSales = useMemo(() => {
+    let result = sales;
+    if (statusFilter === 'completed') {
+      result = result.filter((s) => s.status === 'completed' || s.status === 'partially_returned');
+    } else if (statusFilter === 'returned') {
+      result = result.filter((s) => s.status === 'fully_returned' || s.status === 'partially_returned');
+    } else if (statusFilter === 'cancelled') {
+      result = result.filter((s) => s.status === 'cancelled');
+    }
+
     const query = search.trim().toLowerCase();
-    if (!query) return sales;
-    return sales.filter((sale) =>
+    if (!query) return result;
+    return result.filter((sale) =>
       (sale.invoice_number || '').toLowerCase().includes(query) ||
       (sale.customer?.name || 'walk-in customer').toLowerCase().includes(query) ||
       (sale.cashier?.full_name || '').toLowerCase().includes(query)
     );
-  }, [sales, search]);
+  }, [sales, search, statusFilter]);
 
-  const filteredTotal = useMemo(
-    () => filteredSales.reduce((sum, sale) => sum + getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee), 0),
+  const filteredNetTotal = useMemo(
+    () => filteredSales.reduce((sum, sale) => sum + getSaleNetAmount(sale), 0),
+    [filteredSales],
+  );
+
+  const completedSalesCount = useMemo(
+    () => filteredSales.filter((s) => s.status === 'completed' || s.status === 'partially_returned').length,
+    [filteredSales],
+  );
+
+  const returnedSalesCount = useMemo(
+    () => filteredSales.filter((s) => s.status === 'fully_returned').length,
+    [filteredSales],
+  );
+
+  const cancelledSalesCount = useMemo(
+    () => filteredSales.filter((s) => s.status === 'cancelled').length,
     [filteredSales],
   );
 
   const activePeriodLabel = PERIODS.find((option) => option.value === period)?.label ?? 'Selected period';
-  const emptyMessage = period === 'today'
+  const emptyMessage = search.trim()
+    ? 'No sales match your search.'
+    : statusFilter !== 'all'
+    ? `No ${statusFilter} sales found for the selected period.`
+    : period === 'today'
     ? 'No sales found for today.'
     : 'No sales found for the selected period.';
 
@@ -212,13 +279,26 @@ export function Sales() {
         )}
 
         <div className='mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-dashboard-border pt-3'>
-          <div className='flex flex-wrap gap-x-6 gap-y-1 text-sm'>
-            <p className='text-dashboard-text-sub'>
+          <div className='flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
+            <div className='flex flex-wrap items-center gap-2'>
               <span className='font-medium text-dashboard-text-primary'>{activePeriodLabel}</span>
-              {' · '}Sales: <span className='font-semibold text-dashboard-text-primary'>{filteredSales.length}</span>
-            </p>
+              <span className='text-dashboard-text-sub'>·</span>
+              <span className='text-dashboard-text-sub'>
+                Sales: <span className='font-semibold text-dashboard-text-primary'>{completedSalesCount}</span>
+              </span>
+              {returnedSalesCount > 0 && (
+                <span className='inline-flex items-center rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200'>
+                  {returnedSalesCount} Returned
+                </span>
+              )}
+              {cancelledSalesCount > 0 && (
+                <span className='inline-flex items-center rounded-md border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-300'>
+                  {cancelledSalesCount} Cancelled
+                </span>
+              )}
+            </div>
             <p className='text-dashboard-text-sub'>
-              Total: <span className='font-semibold text-dashboard-text-primary'>{formatCurrency(filteredTotal)}</span>
+              Total: <span className='font-semibold text-emerald-300'>{formatCurrency(filteredNetTotal)}</span>
             </p>
           </div>
           <Button variant='secondary' size='sm' onClick={() => void fetchSales()} disabled={loading}>
@@ -228,14 +308,38 @@ export function Sales() {
       </div>
 
       <div className="glass-card p-4">
-        <div className="relative z-10 max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16} />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by invoice, customer, or cashier"
-            className="pl-10"
-          />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative z-10 max-w-md flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dashboard-text-sub" size={16} />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by invoice, customer, or cashier"
+              className="pl-10"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5" aria-label="Filter by invoice status">
+            {(['all', 'completed', 'returned', 'cancelled'] as const).map((statusKey) => {
+              const label = statusKey === 'all' ? 'All' : statusKey.charAt(0).toUpperCase() + statusKey.slice(1);
+              const count = statusCounts[statusKey];
+              const active = statusFilter === statusKey;
+              return (
+                <button
+                  key={statusKey}
+                  type="button"
+                  onClick={() => setStatusFilter(statusKey)}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    active
+                      ? 'border border-dashboard-accent bg-dashboard-accent text-white shadow-glass-glow'
+                      : 'border border-white/10 bg-white/[0.04] text-dashboard-text-sub hover:border-white/20 hover:text-dashboard-text-primary'
+                  }`}
+                >
+                  {label} ({count})
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -256,41 +360,74 @@ export function Sales() {
           isEmpty={filteredSales.length === 0}
           emptyMessage={emptyMessage}
         >
-          {filteredSales.map((sale) => (
-            <tr key={sale.id} className="hover:bg-dashboard-hover">
-              <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{sale.invoice_number || sale.id.slice(0, 8)}</td>
-              <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatDate(sale.created_at)}</td>
-              <td className="px-6 py-4 text-sm text-dashboard-text-sub">{sale.customer?.name || 'Walk-in Customer'}</td>
-              <td className="px-6 py-4 text-sm text-dashboard-text-sub">{sale.cashier?.full_name || 'Unknown'}</td>
-              <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{formatCurrency(getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee))}</td>
-              <td className="px-6 py-4 text-sm capitalize text-dashboard-text-sub">{sale.payment_method.replace('_', ' ')}</td>
-              <td className="px-6 py-4 text-sm">
-                <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(sale.status)}`}>
-                  {statusLabel(sale.status)}
-                </span>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex items-center justify-end gap-3">
-                  <Link to={`/sales/${sale.id}`} className="text-dashboard-text-sub hover:text-dashboard-text-primary">
-                    <Eye size={18} />
-                  </Link>
-                  <button
-                    type="button"
-                    title="Print receipt"
-                    className="text-dashboard-text-sub hover:text-dashboard-text-primary"
-                    onClick={() => handlePrint(sale)}
-                  >
-                    <Printer size={18} />
-                  </button>
-                  {profile?.role === 'admin' && sale.status !== 'cancelled' && (
-                    <button type="button" className="text-red-400 hover:text-red-300" onClick={() => void handleCancel(sale)}>
-                      <Ban size={18} />
-                    </button>
+          {filteredSales.map((sale) => {
+            const originalAmount = getCustomerSaleAmount(sale.total_amount, sale.card_payment_fee);
+            const netAmount = getSaleNetAmount(sale);
+            return (
+              <tr key={sale.id} className="hover:bg-dashboard-hover">
+                <td className="px-6 py-4 text-sm font-medium text-dashboard-text-primary">{sale.invoice_number || sale.id.slice(0, 8)}</td>
+                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{formatDate(sale.created_at)}</td>
+                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{sale.customer?.name || 'Walk-in Customer'}</td>
+                <td className="px-6 py-4 text-sm text-dashboard-text-sub">{sale.cashier?.full_name || 'Unknown'}</td>
+                <td className="px-6 py-4 text-sm">
+                  {sale.status === 'cancelled' ? (
+                    <div className="flex flex-col">
+                      <span className="font-medium text-dashboard-text-sub/60 line-through" title="Cancelled sale (voided)">
+                        {formatCurrency(originalAmount)}
+                      </span>
+                      <span className="text-[11px] text-red-300">Voided (LKR 0.00)</span>
+                    </div>
+                  ) : sale.status === 'fully_returned' ? (
+                    <div className="flex flex-col">
+                      <span className="font-medium text-dashboard-text-sub/60 line-through" title="Fully returned invoice">
+                        {formatCurrency(originalAmount)}
+                      </span>
+                      <span className="text-[11px] text-amber-300">Returned (LKR 0.00)</span>
+                    </div>
+                  ) : sale.status === 'partially_returned' ? (
+                    <div className="flex flex-col">
+                      <span className="font-medium text-dashboard-text-primary">
+                        {formatCurrency(netAmount)}
+                      </span>
+                      <span className="text-[11px] text-dashboard-text-sub">
+                        orig: {formatCurrency(originalAmount)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-medium text-dashboard-text-primary">
+                      {formatCurrency(originalAmount)}
+                    </span>
                   )}
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-6 py-4 text-sm capitalize text-dashboard-text-sub">{sale.payment_method.replace('_', ' ')}</td>
+                <td className="px-6 py-4 text-sm">
+                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(sale.status)}`}>
+                    {statusLabel(sale.status)}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center justify-end gap-3">
+                    <Link to={`/sales/${sale.id}`} className="text-dashboard-text-sub hover:text-dashboard-text-primary">
+                      <Eye size={18} />
+                    </Link>
+                    <button
+                      type="button"
+                      title="Print receipt"
+                      className="text-dashboard-text-sub hover:text-dashboard-text-primary"
+                      onClick={() => handlePrint(sale)}
+                    >
+                      <Printer size={18} />
+                    </button>
+                    {profile?.role === 'admin' && sale.status !== 'cancelled' && (
+                      <button type="button" className="text-red-400 hover:text-red-300" onClick={() => void handleCancel(sale)}>
+                        <Ban size={18} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </DataTable>
       )}
     </div>

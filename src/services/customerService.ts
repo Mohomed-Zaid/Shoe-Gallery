@@ -72,7 +72,7 @@ export async function getCustomerById(id: string): Promise<{ data: CustomerProfi
     return { data: null, error: salesError as Error };
   }
 
-  const completedSales = ((sales as Sale[]) ?? []).filter((sale) => sale.status !== 'held');
+  const completedSales = ((sales as Sale[]) ?? []).filter((sale) => !['held', 'cancelled', 'fully_returned'].includes(sale.status));
   const totalAmountSpent = completedSales.reduce((sum, sale) => sum + Number(sale.total_amount ?? 0), 0);
 
   return {

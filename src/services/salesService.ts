@@ -37,6 +37,13 @@ export interface SaleWithRelations extends Sale {
       variant: (ProductVariant & { product: Product | null }) | null;
     }
   >;
+  sales_returns?: Array<{
+    id: string;
+    status: string;
+    refund_amount: number;
+    store_credit_amount: number;
+    sales_return_items?: Array<{ return_total: number; quantity_returned: number }>;
+  }>;
 }
 
 export interface CreateSalePayload {
@@ -91,6 +98,13 @@ export async function getSales(filters: SalesListFilters = {}) {
           *,
           product:products(*)
         )
+      ),
+      sales_returns:sales_returns!sales_returns_sale_id_fkey(
+        id,
+        status,
+        refund_amount,
+        store_credit_amount,
+        sales_return_items(return_total,quantity_returned)
       )
     `)
     .neq('status', 'held');
